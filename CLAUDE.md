@@ -109,7 +109,7 @@
   `lib/game_center_link.tsx` の記録リンクを各画面に出す。**window.open
   はしない**。トップページの `islands/game_center.tsx` は、ハブからの起動時に
   URL のトークンを読むためにも置いている。
-- 登録: `.github/workflows/register.yaml` が main の Pages デプロイ後に
+- 登録: `.github/workflows/register.yaml` が main の Pages デプロイ後に curl で
   `https://igo.kbn.one/` を GameCenter に読ませる。初回だけ
   https://ga-cen.kbn.one/dev で作者の承認が要る。
 
