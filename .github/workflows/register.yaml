@@ -1,4 +1,5 @@
 # Tells GameCenter (https://ga-cen.kbn.one) to read the published top page and its manifest.
+# (A plain curl: the `kuboon/game-center/action@v1` tag does not exist.)
 # It runs after the Pages deploy on main has finished, so what it reads is what just shipped. The
 # first registration waits for the author's approval at https://ga-cen.kbn.one/dev; after that
 # every run goes straight through.
@@ -18,6 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: kuboon/game-center/action@v1
-        with:
-          url: https://igo.kbn.one/
+      # 202 = waiting for approval, 200 = registered; anything else fails the job.
+      - name: Register https://igo.kbn.one/
+        run: |
+          status=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST https://ga-cen.kbn.one/api/registry/v1/games \
+            -H 'content-type: application/json' \
+            -d '{"url":"https://igo.kbn.one/"}')
+          cat response.json; echo
+          case "$status" in 200|202) ;; *) echo "GameCenter answered $status"; exit 1 ;; esac
