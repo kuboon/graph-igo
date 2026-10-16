@@ -268,7 +268,7 @@ export function Shell(handle: Handle<ShellProps>) {
             href={routes.home.href()}
             data-rmx-document={document}
           >
-            Remix3 on Deno Template
+            graph-igo
           </a>
           <nav mix={navStyle}>
             <a href={routes.home.href()} data-rmx-document={document}>Home</a>

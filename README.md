@@ -1,16 +1,19 @@
-# deno-remix-tmpl
+# graph-igo
 
-Remix v3 + Deno のリファレンス実装 (DPoP セッションマネージャー付き)。
+任意のグラフの上で打つ囲碁。ルールエンジンと CPU はそれぞれ Rust 製の wasm
+モジュールで、ブラウザだけで動く。
 
-## デモ
+- デモ (GitHub Pages): <https://kuboon.github.io/graph-igo/>
+- `wasm/engine` — `play` (次の 1 手で何が起きるか) / `regions` (空きが n
+  以上連なる部分グラフ) / `evaluate` (部分グラフを CPU に判定させて数える)
+- `wasm/cpu` — `judge` (部分グラフが黒白どちらの地か) / `genmove`
+  (原始モンテカルロ)
+- `web/` — 遊ぶページ (Remix v3 + Deno、静的サイト)
 
-- GitHub Pages (静的版): <https://kuboon.github.io/deno-remix-tmpl/>
-- Cloudflare Workers (サーバー版、`/api/*` あり):
-  <https://deno-remix-tmpl.kuboon.workers.dev/>
+```bash
+deno task dev   # rustup と Deno があれば、wasm をビルドしてから起動
+```
 
-このリポジトリは GitHub テンプレート。新しいアプリを作るときの手順は
-[TEMPLATE.md](./TEMPLATE.md)（static / server
-モードの選択、改変、不要機能の削除）、 開発のルールは [CLAUDE.md](./CLAUDE.md)
-を参照。
-
-ref: https://github.com/remix-run/remix
+開発のルールは
+[CLAUDE.md](./CLAUDE.md)。[deno-remix-tmpl](https://github.com/kuboon/deno-remix-tmpl)
+から作成 (init 手順は [TEMPLATE.md](./TEMPLATE.md))。

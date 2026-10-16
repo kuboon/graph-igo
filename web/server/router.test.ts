@@ -7,12 +7,24 @@ Deno.test("GET / returns the shell with nav links and the runtime script", async
   assertStringIncludes(res.headers.get("content-type") ?? "", "text/html");
   const html = await res.text();
   assertStringIncludes(html, "<!DOCTYPE html>");
-  assertStringIncludes(html, "Remix3 on Deno Template");
-  assertStringIncludes(html, "kuboon.github.io/deno-remix-tmpl");
+  assertStringIncludes(html, "graph-igo");
+  assertStringIncludes(html, "/assets/islands/graph_go");
   assertStringIncludes(html, 'href="/hydration"');
   assertStringIncludes(html, '<script type="module" src="/assets/hydration');
   // Soft navigation is the runtime's default now; no frame target attributes.
   assert(!html.includes("rmx-target"));
+});
+
+Deno.test("the game's wasm modules are served and crawled", async () => {
+  const { entryPoints } = await import("./router.tsx");
+  for (const name of ["engine", "cpu"]) {
+    const path = `/static/wasm/${name}.wasm`;
+    assert(entryPoints.includes(path), path);
+    const res = await router.fetch(new Request(`http://x${path}`));
+    assertEquals(res.status, 200);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    assert(WebAssembly.validate(bytes), path);
+  }
 });
 
 Deno.test("GET /hydration includes the Counter clientEntry marker", async () => {
@@ -38,33 +50,6 @@ Deno.test("GET /sw.js serves the worker with a root scope", async () => {
   assertStringIncludes(res.headers.get("content-type") ?? "", "javascript");
   assertEquals(res.headers.get("service-worker-allowed"), "/");
   assertStringIncludes(await res.text(), "addEventListener");
-});
-
-Deno.test("GET /api/protected without DPoP proof is rejected", async () => {
-  const res = await router.fetch(new Request("http://x/api/protected"));
-  assert(
-    res.status === 401 || res.status === 400,
-    `expected 400 or 401, got ${res.status}`,
-  );
-  await res.body?.cancel();
-});
-
-Deno.test("GET /api/turso reports unconfigured without Turso env", async () => {
-  // No TURSO_DATABASE_URL in the test environment — the sample degrades to a
-  // 503 instead of attempting a connection.
-  const res = await router.fetch(new Request("http://x/api/turso"));
-  assertEquals(res.status, 503);
-  const body = await res.json() as { configured?: boolean };
-  assertEquals(body.configured, false);
-});
-
-Deno.test("GET /.well-known/jwks.json publishes the RP key", async () => {
-  const res = await router.fetch(
-    new Request("http://x/.well-known/jwks.json"),
-  );
-  assertEquals(res.status, 200);
-  const body = await res.json() as { keys: { kty: string }[] };
-  assertEquals(body.keys[0].kty, "EC");
 });
 
 for (

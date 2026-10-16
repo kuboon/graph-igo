@@ -1,105 +1,84 @@
 import { css, type Handle } from "@remix-run/component";
 
-import { routes } from "../routes.ts";
+import { GraphGo } from "../islands/graph_go.tsx";
 import { cardStyle } from "../theme.ts";
 
-export const title = "Remix3 on Deno Template";
+export const title = "グラフ囲碁 — graph-igo";
 export const description =
-  "Remix v3 + Deno reference app with a DPoP session middleware. Served live on Deno Deploy and statically on GitHub Pages.";
+  "任意のグラフの上で打つ囲碁。ルールエンジンと CPU はそれぞれ Rust 製の wasm モジュールで、ブラウザだけで動きます。";
 
-/** The shell places the sign-in island, so every page boots the runtime. */
+/** The board is an island. */
 export const hydrate = true;
 
 export default function Home(_handle: Handle) {
   return () => (
     <>
-      <h1>Remix3 on Deno Template</h1>
-      <p>Deno + Remix v3 (fetch-router) リファレンス実装。</p>
-      <p>
-        デモ:{" "}
-        <a href="https://kuboon.github.io/deno-remix-tmpl/">
-          GitHub Pages (静的版)
-        </a>
-        {" / "}
-        <a href="https://deno-remix-tmpl.kuboon.workers.dev/">
-          Cloudflare Workers (サーバー版)
-        </a>
+      <h1>グラフ囲碁</h1>
+      <p mix={leadStyle}>
+        碁盤の目の代わりに、任意のグラフの上で打つ囲碁です。点が交点、辺が隣接。
+        石のつながり・呼吸点・取り・コウ・自殺手禁止は普通の囲碁と同じです。
       </p>
 
-      <section mix={cardStyle}>
-        <h2>構成</h2>
-        <ul mix={listStyle}>
-          <li>
-            <code>packages/remix-dpop-session-middleware/</code>{" "}
-            — DPoP セッション middleware (Remix v3 fetch-router)
-          </li>
-          <li>
-            <code>packages/session-storage-kv/</code>{" "}
-            — Remix v3 SessionStorage を KvRepo で実装
-          </li>
-          <li>
-            <code>web/</code> — この Web アプリ。<code>client/</code>{" "}
-            がブラウザへ渡るもの全て、<code>server/</code> がルーターと API
-          </li>
-        </ul>
-      </section>
+      <GraphGo />
 
       <section mix={cardStyle}>
-        <h2>デプロイ</h2>
+        <h2>しくみ</h2>
         <p>
-          同じ <code>web/server/router.tsx</code>{" "}
-          から静的サイトを作り、2 通りに配信します。
+          どちらも <code>wasm/</code>{" "}
+          の Rust を wasm32 にビルドしたもので、JSON を受け取って JSON
+          を返します (<code>web/client/lib/graph_go/</code>{" "}
+          が読み込みと接続を担当)。
         </p>
         <ul mix={listStyle}>
           <li>
-            <strong>Cloudflare Workers</strong>{" "}
-            — 静的ビルドを Workers の static assets として配信し、<code>
-              /api/*
-            </code>{" "}
-            だけを Worker (<code>web/server/worker.ts</code>) が答える。
+            <strong>エンジン</strong> (<code>engine.wasm</code>)
+            <ul>
+              <li>
+                <code>play</code>{" "}
+                — 現在の盤面に次の 1 手を置いたとき何が起きるか
+                (合法か、取られる石、コウ、アタリ、次の盤面)
+              </li>
+              <li>
+                <code>regions</code>{" "}
+                — 空点が n
+                個以上つながった部分を、周りの石ごと部分グラフとして取り出す
+              </li>
+              <li>
+                <code>evaluate</code> — 部分グラフをそれぞれ CPU モジュールの
+                {" "}
+                <code>judge</code>{" "}
+                に投げ、黒白どちらの地かを判定させて数える (n
+                未満の領域はエンジンが「片方の色だけに囲まれていればその色」で決める)
+              </li>
+            </ul>
           </li>
           <li>
-            <strong>GitHub Pages</strong>{" "}
-            — ビルドが同じルーターをクロールして 静的 HTML にする。<code>
-              /api/*
-            </code>{" "}
-            は静的化しない。
+            <strong>CPU</strong> (<code>cpu.wasm</code>)
+            <ul>
+              <li>
+                <code>judge</code>{" "}
+                — 部分グラフの空点ごとに近い方の色を数え、6
+                割以上を占めた色の地とする
+              </li>
+              <li>
+                <code>genmove</code>{" "}
+                —
+                原始モンテカルロ。候補手ごとにランダムな終局まで打ち切り、勝率の最も高い手を選ぶ
+              </li>
+            </ul>
           </li>
         </ul>
+        <p>
+          エンジンは <code>cpu.judge</code>{" "}
+          を import していて、ページがそれを CPU モジュールの export
+          につなぎます。数え方は中国ルール (石 + 地、白にコミ)。
+        </p>
       </section>
-
-      <section mix={cardStyle}>
-        <h2>API エンドポイント (Cloudflare Workers のみ)</h2>
-        <ul mix={listStyle}>
-          <li>
-            <code>GET {routes.api.protected.get.href()}</code>{" "}
-            — DPoP proof 必須。セッションデータを返す
-          </li>
-          <li>
-            <code>POST {routes.api.protected.post.href()}</code>{" "}
-            — DPoP proof 必須。リクエスト body をセッションにマージ
-          </li>
-          <li>
-            <code>POST {routes.api.notify.href()}</code>{" "}
-            — サーバー起点のプッシュ通知 (id.kbn.one 経由)
-          </li>
-          <li>
-            <code>GET {routes.api.turso.href()}</code> — Turso (libSQL) +{" "}
-            <code>@remix-run/data-table</code> のサンプル
-          </li>
-          <li>
-            <code>GET {routes.jwks.href()}</code> — RP の公開 JWKS
-          </li>
-        </ul>
-      </section>
-
-      <p>
-        <a href={routes.hydration.href()}>Hydration のサンプル →</a>{" "}
-        <a href={routes.my.href()}>マイページ →</a>
-      </p>
     </>
   );
 }
+
+const leadStyle = css({ marginBottom: "1.5rem" });
 
 const listStyle = css({
   paddingLeft: "1.1rem",

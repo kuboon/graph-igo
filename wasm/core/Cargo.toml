@@ -1,0 +1,10 @@
+[package]
+name = "graph-go-core"
+description = "Go rules on an arbitrary graph, shared by the engine and the CPU"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
