@@ -30,8 +30,6 @@ export const routes = route(base, {
   tsumego: get("/tsumego"),
   // [feature:signin] (the push card on this page is [feature:push])
   my: get("/my"),
-  // [feature:fullscreen]
-  fullscreen: get("/fullscreen"),
   /** The explanations. Articles are Markdown files; `server/docs/` answers these by reading them. */
   docs: route("docs", {
     index: get("/"),

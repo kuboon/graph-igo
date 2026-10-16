@@ -3,7 +3,8 @@
  * lattice, a honeycomb or a random planar graph alike.
  *
  * A plain function rather than a component: it holds no state, and both islands that use it
- * (`islands/graph_go.tsx`, `islands/tsumego.tsx`) re-render it whole on every update.
+ * (`islands/graph_go.tsx`, `islands/tsumego.tsx`) re-render it whole on every update. It fills
+ * the box it is placed in; the board is drawn square and centred within it.
  */
 
 import { css, on, type RemixNode } from "@remix-run/component";
@@ -47,6 +48,8 @@ export function boardView(props: BoardViewProps): RemixNode {
       role="img"
       aria-label={`${graph.nodeCount} 点のグラフ盤`}
     >
+      {/* The wood, as a shape: the SVG fills its box and keeps the board square inside it. */}
+      <rect x={0} y={0} width={VIEW} height={VIEW} rx={2} mix={woodStyle} />
       {graph.edges.map(([a, b]) => (
         <line
           key={`e${a}-${b}`}
@@ -129,15 +132,14 @@ function stoneRadius({ graph, points }: BoardShape): number {
 // --- styles -----------------------------------------------------------------
 
 const boardStyle = css({
+  display: "block",
   width: "100%",
-  height: "auto",
-  aspectRatio: "1",
-  background: "#dcb35c",
-  borderRadius: "var(--radius-lg)",
-  boxShadow: "0 1px 3px rgb(0 0 0 / 0.25)",
+  height: "100%",
   touchAction: "manipulation",
   userSelect: "none",
 });
+
+const woodStyle = css({ fill: "#dcb35c" });
 
 const edgeStyle = css({ stroke: "#3b2a12", strokeWidth: 0.25 });
 const pointStyle = css({ fill: "#3b2a12" });

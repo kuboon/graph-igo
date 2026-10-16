@@ -52,7 +52,7 @@ async function serveLightpanda(port: number) {
 const STATUS = "[aria-live]";
 
 Deno.test({
-  name: "lightpanda: /tsumego が wasm を読み込み、正解の初手に CPU が応じる",
+  name: "lightpanda: /tsumego が wasm を読み込み、初手に CPU が応じる",
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
@@ -107,7 +107,8 @@ Deno.test({
           STATUS,
         );
         const status = await page.$eval(STATUS, (el) => el.textContent ?? "");
-        assertEquals(status.includes("不正解"), false, status);
+        // The first problem takes more than one move, so the CPU answers rather than resigning.
+        assertEquals(status.includes("白が応じました"), true, status);
 
         await page.close();
         await context.close();

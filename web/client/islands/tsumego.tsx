@@ -3,9 +3,10 @@
  *
  * The player moves; the engine says what the move does; the CPU module's `solve` reads the fight
  * out from there and plays the other side's best reply. A capture problem is solved when the
- * target group comes off the board, and failed the moment the reading says it can get away. An
- * escape problem is solved the moment the reading says black can no longer catch it within the
- * problem's depth, and failed when it is captured. The problems are in `lib/graph_go/problems.ts`.
+ * target group comes off the board; an escape problem is solved the moment the reading says black
+ * can no longer catch it within the problem's depth. A wrong move is never called wrong: the CPU
+ * just answers it, and the player keeps going — or starts over. The only end other than solving
+ * is an escape problem's group being captured. The problems are in `lib/graph_go/problems.ts`.
  */
 
 import { clientEntry, css, type Handle, on } from "@remix-run/component";
@@ -14,6 +15,8 @@ import { base } from "../base.ts";
 import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
 import { color as token, radius } from "../tokens.ts";
 import { boardView } from "../lib/graph_go/board_view.tsx";
+import { gameFrame } from "../lib/graph_go/game_frame.tsx";
+import { onFullscreenChange } from "../lib/fullscreen.ts";
 import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
 import { type Problem, PROBLEMS } from "../lib/graph_go/problems.ts";
 import {
@@ -27,7 +30,8 @@ import {
 } from "../lib/graph_go/types.ts";
 import { type GraphGo as Modules, loadGraphGo } from "../lib/graph_go/wasm.ts";
 
-type Status = "playing" | "solved" | "failed";
+/** `over`: the group of an escape problem was captured, so there is nothing left to save. */
+type Status = "playing" | "solved" | "over";
 
 const NAME: Record<Player, string> = { 1: "黒", 2: "白" };
 
@@ -165,32 +169,29 @@ export const Tsumego = clientEntry(
       }, REPLY_DELAY);
     }
 
-    /** The CPU's side of the fight, after the player's move. */
+    /** The CPU's side of the fight, after the player's move: its best reply, whatever it is. */
     function reply(): void {
       const cpu = opponent(player());
       const reading = read(cpu);
       if (problem.goal === "capture") {
-        // White to move: does it get away from here?
+        // White to move: its most stubborn defence, or the escape if the reading finds one.
         play(cpu, reading.move);
-        if (!reading.attackerWins) {
-          status = "failed";
-          message = "不正解。白に逃げられます。";
-        } else {message = `白は${
-            reading.move === null ? "パス" : "抵抗"
-          }。続けてください。`;}
-      } else {
-        // Black to move: can it still catch the group?
-        if (!reading.attackerWins) {
-          status = "solved";
-          message = "正解! 逃げ切りました。";
-          return;
-        }
-        play(cpu, reading.move);
-        if (captured()) {
-          status = "failed";
-          message = "不正解。取られてしまいました。";
-        } else message = "黒が追ってきます。続けてください。";
+        message = reading.move === null
+          ? "白はパスしました。続けてください。"
+          : "白が応じました。続けてください。";
+        return;
       }
+      // Black to move: if it can no longer catch the group, white has got away.
+      if (!reading.attackerWins) {
+        status = "solved";
+        message = "正解! 逃げ切りました。";
+        return;
+      }
+      play(cpu, reading.move);
+      if (captured()) {
+        status = "over";
+        message = "白が取られました。「やり直す」で最初から試せます。";
+      } else message = "黒が追ってきます。続けてください。";
     }
 
     function showHint(): void {
@@ -201,7 +202,7 @@ export const Tsumego = clientEntry(
         : !reading.attackerWins;
       hint = works ? reading.move : null;
       message = hint === null
-        ? "ここからでは、もう手がありません。やり直してください。"
+        ? "この局面からは、読みで確実な手が見つかりません。続けるか、やり直してください。"
         : "青い印のところが読みの答えです。";
       void handle.update();
     }
@@ -212,6 +213,7 @@ export const Tsumego = clientEntry(
     }
 
     handle.queueTask(async () => {
+      onFullscreenChange(() => void handle.update(), handle.signal);
       try {
         modules = await loadGraphGo(
           `${base}/static/wasm/engine.wasm`,
@@ -230,22 +232,21 @@ export const Tsumego = clientEntry(
         ? "error"
         : status === "solved"
         ? "success"
-        : status === "failed"
-        ? "warning"
         : "info";
 
-      return (
-        <div mix={layoutStyle}>
-          {boardView({
-            shape,
-            stones,
-            onPlay,
-            playable,
-            lastMove,
-            marked: targetGroup(),
-            hint,
-          })}
-
+      return gameFrame({
+        title: "詰碁",
+        onFullscreenToggled: () => void handle.update(),
+        board: boardView({
+          shape,
+          stones,
+          onPlay,
+          playable,
+          lastMove,
+          marked: targetGroup(),
+          hint,
+        }),
+        panel: (
           <div mix={panelStyle}>
             <div mix={rowStyle}>
               <button
@@ -337,12 +338,16 @@ export const Tsumego = clientEntry(
             </div>
 
             <p mix={mutedStyle}>
+              青で囲んだ白を、黒なら取る、白なら逃がす問題です。打つと CPU
+              が読んで最善の応手を返します。間違えても続けられます。
+            </p>
+            <p mix={mutedStyle}>
               「逃げ切り」は、黒がもう {problem.depth}{" "}
               手以内には取れないと CPU が読み切った状態です。
             </p>
           </div>
-        </div>
-      );
+        ),
+      });
     };
   },
 );
@@ -361,16 +366,6 @@ function neighbours({ graph }: BoardShape): number[][] {
 }
 
 // --- styles -----------------------------------------------------------------
-
-const layoutStyle = css({
-  display: "grid",
-  gap: "1.25rem",
-  gridTemplateColumns: "minmax(0, 1fr)",
-  "@media (min-width: 56rem)": {
-    gridTemplateColumns: "minmax(0, 3fr) minmax(16rem, 2fr)",
-    alignItems: "start",
-  },
-});
 
 const panelStyle = css({ display: "grid", gap: "0.75rem" });
 

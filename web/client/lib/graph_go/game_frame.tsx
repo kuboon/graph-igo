@@ -1,0 +1,147 @@
+/**
+ * The frame of a game screen: the whole viewport, a thin bar on top, the board as large as the
+ * screen allows, and the controls beside it (landscape) or under it (portrait).
+ *
+ * Game pages are `bare` — no site header or footer — and set `viewport-fit=cover`, so the frame
+ * pads itself by the safe-area insets. The bar's "全画面" button takes the frame fullscreen where
+ * the Fullscreen API exists (`lib/fullscreen.ts`). A function rather than a component, like
+ * `boardView`: the islands own the state and re-render it whole.
+ */
+
+import { css, on, ref, type RemixNode } from "@remix-run/component";
+
+import { routes } from "../../routes.ts";
+import { color, radius } from "../../tokens.ts";
+import {
+  canFullscreen,
+  isFullscreen,
+  toggleFullscreen,
+} from "../fullscreen.ts";
+
+export interface GameFrameProps {
+  title: string;
+  board: RemixNode;
+  panel: RemixNode;
+  /** Re-render after entering or leaving fullscreen, so the button's label follows. */
+  onFullscreenToggled(): void;
+}
+
+export function gameFrame(props: GameFrameProps): RemixNode {
+  let stage: HTMLElement | null = null;
+  const offerFullscreen = canFullscreen();
+  const fullscreen = isFullscreen();
+
+  return (
+    <div mix={[stageStyle, ref((node) => (stage = node as HTMLElement))]}>
+      <header mix={barStyle}>
+        <a href={routes.home.href()} mix={barLinkStyle}>← グラフ囲碁</a>
+        <strong mix={titleStyle}>{props.title}</strong>
+        <a href={routes.docs.index.href()} mix={barLinkStyle}>解説</a>
+        {offerFullscreen
+          ? (
+            <button
+              type="button"
+              mix={[
+                barButtonStyle,
+                on("click", async () => {
+                  await toggleFullscreen(stage);
+                  props.onFullscreenToggled();
+                }),
+              ]}
+            >
+              {fullscreen ? "全画面を終了" : "全画面"}
+            </button>
+          )
+          : null}
+      </header>
+      <div mix={bodyStyle}>
+        <div mix={boardAreaStyle}>{props.board}</div>
+        <div mix={panelStyle}>{props.panel}</div>
+      </div>
+    </div>
+  );
+}
+
+// --- styles -----------------------------------------------------------------
+
+const stageStyle = css({
+  position: "fixed",
+  inset: 0,
+  display: "grid",
+  gridTemplateRows: "auto minmax(0, 1fr)",
+  boxSizing: "border-box",
+  paddingTop: "env(safe-area-inset-top)",
+  paddingBottom: "env(safe-area-inset-bottom)",
+  paddingLeft: "env(safe-area-inset-left)",
+  paddingRight: "env(safe-area-inset-right)",
+  background: color.bg,
+  color: color.fg,
+  overflow: "hidden",
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  WebkitTouchCallout: "none",
+  WebkitTapHighlightColor: "transparent",
+  "&::backdrop": { background: color.bg },
+});
+
+const barStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "0.75rem",
+  padding: "0.4rem 0.75rem",
+  borderBottom: `1px solid ${color.border}`,
+  fontSize: "0.9rem",
+});
+
+const titleStyle = css({ flex: "1 1 auto", textAlign: "center" });
+
+const barLinkStyle = css({ textDecoration: "none", whiteSpace: "nowrap" });
+
+const barButtonStyle = css({
+  font: "inherit",
+  cursor: "pointer",
+  padding: "0.15rem 0.6rem",
+  border: `1px solid ${color.border}`,
+  borderRadius: radius.md,
+  background: "transparent",
+  color: color.fg,
+  whiteSpace: "nowrap",
+  "&:hover": { borderColor: color.accent, color: color.accent },
+});
+
+/** Portrait: the board on top, the controls under it. Landscape: side by side. */
+const bodyStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 0,
+  "@media (min-aspect-ratio: 1/1)": {
+    display: "grid",
+    // An explicit row, or it grows to the board's own height and pushes it off the screen.
+    gridTemplateRows: "minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(17rem, 24rem)",
+  },
+});
+
+const boardAreaStyle = css({
+  flex: "0 0 auto",
+  height: "min(100vw, 62dvh)",
+  minHeight: 0,
+  overflow: "hidden",
+  padding: "0.5rem",
+  boxSizing: "border-box",
+  "@media (min-aspect-ratio: 1/1)": { height: "100%" },
+});
+
+const panelStyle = css({
+  flex: "1 1 auto",
+  minHeight: 0,
+  overflowY: "auto",
+  padding: "0.75rem 1rem 1rem",
+  borderTop: `1px solid ${color.border}`,
+  userSelect: "text",
+  WebkitUserSelect: "text",
+  "@media (min-aspect-ratio: 1/1)": {
+    borderTop: "none",
+    borderLeft: `1px solid ${color.border}`,
+  },
+});

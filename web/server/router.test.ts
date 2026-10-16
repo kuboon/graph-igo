@@ -46,8 +46,6 @@ Deno.test("GET /sw.js serves the worker with a root scope", async () => {
 
 for (
   const [path, needle] of [
-    ["/play", "/assets/islands/graph_go"],
-    ["/tsumego", "/assets/islands/tsumego"],
     ["/docs", "詰碁のしくみ"],
     ["/docs/how-it-works", "cpu.judge"],
     ["/docs/rules", "面積計算"],
@@ -62,13 +60,16 @@ for (
   });
 }
 
-Deno.test("GET /fullscreen is a bare page with no shell", async () => {
-  const res = await router.fetch(new Request("http://x/fullscreen"));
-  assertEquals(res.status, 200);
-  const html = await res.text();
-  assert(!html.includes("<main"));
-  assertStringIncludes(html, "FullscreenGame");
-});
+for (const [path, island] of [["/play", "graph_go"], ["/tsumego", "tsumego"]]) {
+  Deno.test(`GET ${path} is a bare game screen`, async () => {
+    const res = await router.fetch(new Request(`http://x${path}`));
+    assertEquals(res.status, 200);
+    const html = await res.text();
+    assert(!html.includes("<main"));
+    assertStringIncludes(html, "viewport-fit=cover");
+    assertStringIncludes(html, `/assets/islands/${island}`);
+  });
+}
 
 Deno.test("GET /docs/unknown is a 404", async () => {
   const res = await router.fetch(new Request("http://x/docs/nope"));

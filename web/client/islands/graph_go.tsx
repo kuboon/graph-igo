@@ -16,6 +16,8 @@ import { base } from "../base.ts";
 import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
 import { color as token, radius } from "../tokens.ts";
 import { boardView } from "../lib/graph_go/board_view.tsx";
+import { gameFrame } from "../lib/graph_go/game_frame.tsx";
+import { onFullscreenChange } from "../lib/fullscreen.ts";
 import {
   BOARD_KINDS,
   type BoardKind,
@@ -228,6 +230,7 @@ export const GraphGo = clientEntry(
     }
 
     handle.queueTask(async () => {
+      onFullscreenChange(() => void handle.update(), handle.signal);
       try {
         modules = await loadGraphGo(
           `${base}/static/wasm/engine.wasm`,
@@ -254,18 +257,19 @@ export const GraphGo = clientEntry(
       const humanTurn = ready && !thinking && !gameOver &&
         seats[toMove] === "human";
 
-      return (
-        <div mix={layoutStyle}>
-          {boardView({
-            shape,
-            stones,
-            onPlay: humanMove,
-            playable: humanTurn,
-            lastMove,
-            atari,
-            territory: owner,
-          })}
-
+      return gameFrame({
+        title: "対局",
+        onFullscreenToggled: () => void handle.update(),
+        board: boardView({
+          shape,
+          stones,
+          onPlay: humanMove,
+          playable: humanTurn,
+          lastMove,
+          atari,
+          territory: owner,
+        }),
+        panel: (
           <div mix={panelStyle}>
             <p
               mix={alertStyle}
@@ -378,6 +382,10 @@ export const GraphGo = clientEntry(
                 </section>
               )
               : null}
+
+            <p mix={mutedStyle}>
+              点をクリックすると着手、両者パスで終局して CPU が地を数えます。
+            </p>
 
             <fieldset mix={fieldsetStyle}>
               <legend>新しい対局</legend>
@@ -519,23 +527,13 @@ export const GraphGo = clientEntry(
               </label>
             </fieldset>
           </div>
-        </div>
-      );
+        ),
+      });
     };
   },
 );
 
 // --- styles -----------------------------------------------------------------
-
-const layoutStyle = css({
-  display: "grid",
-  gap: "1.25rem",
-  gridTemplateColumns: "minmax(0, 1fr)",
-  "@media (min-width: 56rem)": {
-    gridTemplateColumns: "minmax(0, 3fr) minmax(16rem, 2fr)",
-    alignItems: "start",
-  },
-});
 
 const panelStyle = css({ display: "grid", gap: "0.75rem" });
 

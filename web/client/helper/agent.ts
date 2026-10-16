@@ -116,14 +116,13 @@ const replies = [
     },
   },
   {
-    match: /fullscreen|game|canvas|viewport|safe area|notch/i,
+    match: /fullscreen|全画面|game|viewport|safe area|notch/i,
     turn: {
       text:
-        "The fullscreen page is the frame of a game with a placeholder where the game goes: " +
-        "no site chrome, and a stage that fills whatever the browser leaves visible. One " +
-        "action gets the rest of the screen on a phone: tap to fullscreen where the " +
-        "Fullscreen API exists, scroll to fullscreen on iPhone Safari where it does not. On a " +
-        "desktop the game simply starts, and fullscreen is a button in the corner.",
+        "The game screens (対局 and 詰碁) are the whole viewport: no site chrome, the board as " +
+        "large as the screen allows, and a 全画面 button that takes them fullscreen where the " +
+        "Fullscreen API exists. iPhone Safari has no such API, so there the page simply fills " +
+        "the viewport.",
     },
   },
 ];

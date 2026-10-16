@@ -6,7 +6,8 @@
 
 `deno-remix-tmpl` から作った派生アプリ。ステップ 0 (static モード) とステージ 1
 は済み。ステージ 2 は一部済み (hydration-demo・showcase・spa を削除、blog は解説
-`docs` に転用)。fullscreen・helper・signin・push はまだ残っている。
+`docs` に、fullscreen はゲーム画面の枠に転用)。helper・signin・push
+はまだ残っている。
 
 ## このリポジトリは何か（最初に判定する）
 
@@ -73,7 +74,11 @@
   がランダムな局面から読みで「急場で、正解の初手がちょうど 1 つ」のものを選んで
   生成する。`wasm/graph_go_test.ts` が全問の正解の一意性を確かめる。
 - ページ: `/` (詰碁と対局への入口)、`/play` (`islands/graph_go.tsx`)、`/tsumego`
-  (`islands/tsumego.tsx`)、`/docs` (解説)。
+  (`islands/tsumego.tsx`)、`/docs` (解説)。`/play` と `/tsumego` は `bare`
+  のゲーム画面で、`lib/graph_go/game_frame.tsx` がビューポート全体を使う枠
+  (上のバー・盤・操作パネル、全画面ボタンは `lib/fullscreen.ts`) を描く。
+- 詰碁は不正解を判定しない。間違えた手にも CPU
+  が最善の応手を返し、そのまま続けられる。
 - 解説は `web/server/docs/*.md` (front-matter の `title` / `order` /
   `summary`)。 `server/docs/mod.tsx` が `@kuboon/md` で描画する。`deno fmt`
   が日本語の段落を 折り返すので、描画前に日本語どうしの改行を詰めている

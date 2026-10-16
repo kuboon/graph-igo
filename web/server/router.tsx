@@ -36,7 +36,6 @@ import { Layout, type PageModule } from "../client/layout.tsx";
 import { routes } from "../client/routes.ts";
 
 import { docsController } from "./docs/mod.tsx";
-import * as Fullscreen from "../client/pages/fullscreen.tsx"; // [feature:fullscreen]
 import * as Home from "../client/pages/index.tsx";
 import * as Play from "../client/pages/play.tsx";
 import * as Tsumego from "../client/pages/tsumego.tsx";
@@ -108,8 +107,6 @@ const top = createController(routes, {
     home: pageAction(routes.home, Home),
     play: pageAction(routes.play, Play),
     tsumego: pageAction(routes.tsumego, Tsumego),
-    // [feature:fullscreen]
-    fullscreen: pageAction(routes.fullscreen, Fullscreen),
     my: pageAction(routes.my, My),
   },
 });

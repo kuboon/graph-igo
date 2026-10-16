@@ -240,8 +240,6 @@ export function Shell(handle: Handle<ShellProps>) {
             <a href={routes.play.href()}>対局</a>
             <a href={routes.tsumego.href()}>詰碁</a>
             <a href={routes.docs.index.href()}>解説</a>
-            {/* [feature:fullscreen] */}
-            <a href={routes.fullscreen.href()}>Fullscreen</a>
             {
               /*
               The chat's affordance, and only the affordance: `@remix-kbn/helper-agent` draws the
