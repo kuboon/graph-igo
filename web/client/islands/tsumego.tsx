@@ -19,6 +19,7 @@ import { gameFrame } from "../lib/graph_go/game_frame.tsx";
 import { onFullscreenChange } from "../lib/fullscreen.ts";
 import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
 import { type Problem, PROBLEMS } from "../lib/graph_go/problems.ts";
+import { cpuReply, hintMove } from "../lib/graph_go/tsumego.ts";
 import {
   BLACK,
   type Color,
@@ -130,17 +131,6 @@ export const Tsumego = clientEntry(
       return true;
     }
 
-    function read(toMove: Player) {
-      return modules!.cpu.solve({
-        graph: shape.graph,
-        stones,
-        ko,
-        toMove,
-        target: problem.target,
-        maxDepth: problem.depth,
-      });
-    }
-
     const captured = () => stones[problem.target] === EMPTY;
 
     function onPlay(node: number): void {
@@ -172,23 +162,22 @@ export const Tsumego = clientEntry(
     /** The CPU's side of the fight, after the player's move: its best reply, whatever it is. */
     function reply(): void {
       const cpu = opponent(player());
-      const reading = read(cpu);
-      if (problem.goal === "capture") {
-        // White to move: its most stubborn defence, or the escape if the reading finds one.
-        play(cpu, reading.move);
-        message = reading.move === null
-          ? "白はパスしました。続けてください。"
-          : "白が応じました。続けてください。";
-        return;
-      }
-      // Black to move: if it can no longer catch the group, white has got away.
-      if (!reading.attackerWins) {
+      const answer = cpuReply(modules!.cpu, problem, {
+        graph: shape.graph,
+        stones,
+        ko,
+      });
+      if (answer.kind === "escaped") {
         status = "solved";
         message = "正解! 逃げ切りました。";
         return;
       }
-      play(cpu, reading.move);
-      if (captured()) {
+      play(cpu, answer.move);
+      if (problem.goal === "capture") {
+        message = answer.move === null
+          ? "白はパスしました。続けてください。"
+          : "白が応じました。続けてください。";
+      } else if (captured()) {
         status = "over";
         message = "白が取られました。「やり直す」で最初から試せます。";
       } else message = "黒が追ってきます。続けてください。";
@@ -196,11 +185,12 @@ export const Tsumego = clientEntry(
 
     function showHint(): void {
       if (!modules || thinking || status !== "playing") return;
-      const reading = read(player());
-      const works = problem.goal === "capture"
-        ? reading.attackerWins
-        : !reading.attackerWins;
-      hint = works ? reading.move : null;
+      // Checked the way the screen checks a move, so the hint never disagrees with it.
+      hint = hintMove(modules.engine, modules.cpu, problem, {
+        graph: shape.graph,
+        stones,
+        ko,
+      });
       message = hint === null
         ? "この局面からは、読みで確実な手が見つかりません。続けるか、やり直してください。"
         : "青い印のところが読みの答えです。";

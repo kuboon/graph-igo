@@ -10,6 +10,11 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import { loadGraphGo } from "../web/client/lib/graph_go/wasm.ts";
 import { grid, makeBoard } from "../web/client/lib/graph_go/graphs.ts";
 import { BLACK, type Color, WHITE } from "../web/client/lib/graph_go/types.ts";
+import {
+  cpuReply,
+  hintMove,
+  workingMoves,
+} from "../web/client/lib/graph_go/tsumego.ts";
 
 const dir = new URL("../web/client/static/wasm/", import.meta.url);
 const { engine, cpu } = await loadGraphGo(
@@ -148,13 +153,58 @@ Deno.test("every tsumego has exactly its one answer", async () => {
       `${p.id}: after a pass`,
     );
 
-    const working: number[] = [];
-    for (let v = 0; v < graph.nodeCount; v++) {
-      const r = engine.play({ graph, stones, color: p.toPlay, node: v });
-      if (!r.legal) continue;
-      const attackerWins = r.stones[p.target] === 0 || read(r.stones, other);
-      if (attackerWins === (p.goal === "capture")) working.push(v);
-    }
+    // The hint's own check: exactly the answer passes it.
+    const working = workingMoves(engine, cpu, p, { graph, stones, ko: null });
     assertEquals(working, [p.answer], p.id);
+  }
+});
+
+Deno.test("every tsumego is solved by following the hints", async () => {
+  const { PROBLEMS } = await import("../web/client/lib/graph_go/problems.ts");
+  for (const p of PROBLEMS) {
+    const { graph } = makeBoard(p.board.kind, p.board.size, p.board.seed);
+    let stones: Color[] = Array(graph.nodeCount).fill(0);
+    let ko: number | null = null;
+    for (const v of p.black) stones[v] = BLACK;
+    for (const v of p.white) stones[v] = WHITE;
+    const cpuColor = p.toPlay === BLACK ? WHITE : BLACK;
+
+    let solved = false;
+    // The screen's own loop: hint, play it, let the CPU answer.
+    for (let turn = 0; turn < p.depth && !solved; turn++) {
+      const hint = hintMove(engine, cpu, p, { graph, stones, ko });
+      assert(hint !== null, `${p.id}: no hint at turn ${turn}`);
+      const mine = engine.play({
+        graph,
+        stones,
+        ko,
+        color: p.toPlay,
+        node: hint,
+      });
+      ({ stones, ko } = mine);
+      if (p.goal === "capture" && stones[p.target] === 0) {
+        solved = true;
+        break;
+      }
+      const reply = cpuReply(cpu, p, { graph, stones, ko });
+      if (reply.kind === "escaped") {
+        solved = true;
+        break;
+      }
+      const theirs = engine.play({
+        graph,
+        stones,
+        ko,
+        color: cpuColor,
+        node: reply.move,
+      });
+      assert(theirs.legal, `${p.id}: CPU played an illegal move`);
+      ({ stones, ko } = theirs);
+      assert(
+        stones[p.target] !== 0,
+        `${p.id}: the escaping group was captured`,
+      );
+    }
+    assert(solved, `${p.id}: not solved within ${p.depth} turns`);
   }
 });
