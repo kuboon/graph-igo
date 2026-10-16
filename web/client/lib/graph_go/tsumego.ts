@@ -134,3 +134,49 @@ export function hintMove(
   }
   return best ?? moves[0];
 }
+
+/**
+ * Plays the problem out the way the screen would, taking the hint every turn and letting the CPU
+ * reply as it does on screen. A sound problem ends solved; `null` means it did, otherwise the
+ * reason it did not.
+ */
+export function followHints(
+  engine: Engine,
+  cpu: Cpu,
+  problem: Problem,
+  graph: GraphSpec,
+): string | null {
+  let stones: Color[] = Array(graph.nodeCount).fill(EMPTY);
+  let ko: number | null = null;
+  for (const v of problem.black) stones[v] = 1;
+  for (const v of problem.white) stones[v] = 2;
+  for (let turn = 0; turn < problem.depth; turn++) {
+    const hint = hintMove(engine, cpu, problem, { graph, stones, ko });
+    if (hint === null) return `no hint at turn ${turn}`;
+    ({ stones, ko } = engine.play({
+      graph,
+      stones,
+      ko,
+      color: problem.toPlay,
+      node: hint,
+    }));
+    if (problem.goal === "capture" && stones[problem.target] === EMPTY) {
+      return null;
+    }
+    const reply = cpuReply(cpu, problem, { graph, stones, ko });
+    if (reply.kind === "escaped") return null;
+    const theirs = engine.play({
+      graph,
+      stones,
+      ko,
+      color: opponent(problem.toPlay),
+      node: reply.move,
+    });
+    if (!theirs.legal) return `the CPU played an illegal move at turn ${turn}`;
+    ({ stones, ko } = theirs);
+    if (stones[problem.target] === EMPTY) {
+      return `the escaping group was captured at turn ${turn}`;
+    }
+  }
+  return `not solved within ${problem.depth} turns`;
+}

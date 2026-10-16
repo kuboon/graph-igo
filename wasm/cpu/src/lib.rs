@@ -50,11 +50,13 @@ pub fn solve_json(req: SolveRequest) -> Result<SolveResponse, String> {
         attacker: opponent(defender),
         visited: 0,
     };
-    let outcome = reader.read(&board, req.to_move, req.max_depth.min(25));
+    let depth = req.max_depth.min(25);
+    let outcome = reader.read(&board, req.to_move, depth);
+    let best = solve::showcase_move(&mut reader, &board, req.to_move, depth, &outcome);
     Ok(SolveResponse {
         attacker: reader.attacker,
         attacker_wins: outcome.attacker_wins,
-        best: outcome.best,
+        best,
         captured: false,
         visited: reader.visited,
     })
@@ -446,6 +448,22 @@ mod solve_tests {
         assert_eq!(black.attacker, BLACK);
         assert_eq!(black.best, Some(10));
         assert!(!solve(&graph, &stones, WHITE, 11).attacker_wins);
+    }
+
+    #[test]
+    fn a_lost_defender_resists_in_the_fight() {
+        // 碁盤 2 after 黒5-2 白5-1 黒4-1: white is lost, but capturing 4-1 (node 2) makes black
+        // work longest. The search's own candidates never touched that stone.
+        let (graph, stones) = grid6(&[3, 10, 16, 23], &[4, 9, 11]);
+        let res = solve(&graph, &stones, WHITE, 11);
+        assert!(res.attacker_wins);
+        assert_eq!(res.best, Some(2));
+        // ...and after 黒6-3 it connects at 6-1 (node 5) rather than playing far away, which is
+        // what shows the snapback at 4-1.
+        let (graph, stones) = grid6(&[10, 16, 17, 23], &[2, 4, 9, 11]);
+        let res = solve(&graph, &stones, WHITE, 11);
+        assert!(res.attacker_wins);
+        assert_eq!(res.best, Some(5));
     }
 
     #[test]

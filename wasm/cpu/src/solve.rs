@@ -140,11 +140,24 @@ impl Reader {
 
     fn defender_moves(&self, board: &mut Board, liberties: &[usize]) -> Vec<Option<usize>> {
         let mut moves: Vec<Option<usize>> = liberties.iter().map(|&l| Some(l)).collect();
-        // Counter-attacks: attacking groups touching the target that are short of liberties.
+        let defender = board.stones[self.target];
+        // The stones the counter-attack protects: the target's group, and the friendly groups next
+        // to its liberties, which it can connect to. Capturing an attacker that touches any of them
+        // can open a way out — the stone taken is not always the one doing the surrounding.
+        let mut guarded = Vec::new();
+        board.group_of(self.target, &mut guarded);
         let mut group = Vec::new();
-        board.group_of(self.target, &mut group);
+        for &l in liberties {
+            for &u in board.graph.neighbors(l) {
+                if board.stones[u] == defender && !guarded.contains(&u) {
+                    board.group_of(u, &mut group);
+                    guarded.extend_from_slice(&group);
+                }
+            }
+        }
+        // Counter-attacks: attacking groups touching those stones that are short of liberties.
         let mut seen = Vec::new();
-        for &s in &group {
+        for &s in &guarded {
             for &u in board.graph.neighbors(s) {
                 if board.stones[u] != self.attacker || seen.contains(&u) {
                     continue;
@@ -164,6 +177,90 @@ impl Reader {
         }
         moves.push(None);
         moves
+    }
+}
+
+/// The move to show for the side to move, once the reading has decided who wins.
+///
+/// The search stops at the first move that settles the question, which is enough for a verdict
+/// but not for a reply worth watching. So when the attacker wins it plays the *fastest* capture,
+/// and when the defender loses anyway it plays the *most stubborn* move — the one that makes the
+/// attacker need the most moves — tried over every legal move, not only the ones the search
+/// considers. (Losing attackers and winning defenders already get a fitting move from `read`.)
+pub fn showcase_move(
+    reader: &mut Reader,
+    board: &Board,
+    to_move: Color,
+    max_depth: u32,
+    outcome: &Outcome,
+) -> Option<usize> {
+    if !outcome.attacker_wins {
+        return outcome.best;
+    }
+    let after = |reader: &mut Reader, mv: Option<usize>, depth: u32| -> Option<bool> {
+        let mut next = board.clone();
+        match mv {
+            Some(v) => next.play_quick(to_move, v).ok()?,
+            None => {
+                next.ko = None;
+                0
+            }
+        };
+        Some(reader.read(&next, opponent(to_move), depth).attacker_wins)
+    };
+    let empties: Vec<usize> = (0..board.len())
+        .filter(|&v| board.stones[v] == EMPTY)
+        .collect();
+    if to_move == reader.attacker {
+        // The shallowest depth at which some move already wins.
+        for depth in 0..max_depth {
+            for &v in &empties {
+                if after(reader, Some(v), depth) == Some(true) {
+                    return Some(v);
+                }
+            }
+        }
+        outcome.best
+    } else {
+        // For each move, the shallowest depth at which the attacker still wins; keep the deepest.
+        // Ties go to the move that takes stones, then to the one leaving the target the most
+        // liberties, then to the one that makes its group biggest: a stone played far away holds
+        // out just as long, and shows nothing, where connecting shows how the group is lost.
+        let mut best = outcome.best;
+        let mut longest = (0, 0, 0, 0);
+        for mv in empties.iter().map(|&v| Some(v)).chain([None]) {
+            let mut needed = None;
+            for depth in 0..max_depth {
+                match after(reader, mv, depth) {
+                    None => break,
+                    Some(true) => {
+                        needed = Some(depth);
+                        break;
+                    }
+                    Some(false) => {}
+                }
+            }
+            // A legal move the attacker cannot answer in time at all: the search's narrower
+            // candidates missed it, and it is the best defence there is.
+            let needed = match needed {
+                Some(d) => d,
+                None if after(reader, mv, 0).is_some() => max_depth,
+                None => continue,
+            };
+            let mut next = board.clone();
+            let captures = match mv {
+                Some(v) => next.play_quick(to_move, v).unwrap_or(0),
+                None => 0,
+            };
+            let mut group = Vec::new();
+            let liberties = next.group_of(reader.target, &mut group);
+            let score = (needed, captures, liberties, group.len());
+            if score > longest {
+                longest = score;
+                best = mv;
+            }
+        }
+        best
     }
 }
 

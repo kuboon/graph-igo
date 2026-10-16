@@ -7,7 +7,10 @@
  * - **escape** (白先・逃げる): black could take the target if it were black's move, and exactly
  *   one white move saves it.
  *
- * Capture problems must also take at least three black moves, so a plain atari does not count.
+ * Capture problems must also take at least three black moves, so a plain atari does not count,
+ * and every problem must end solved when played through by its own hints against the CPU's
+ * replies (`followHints`) — the screen's own loop, so the CPU never finds a way out the reading
+ * missed.
  *
  * The page reads every reply at the problem's full depth, so the checks here do too.
  *
@@ -18,6 +21,8 @@
  */
 
 import { loadGraphGo } from "../web/client/lib/graph_go/wasm.ts";
+import { followHints } from "../web/client/lib/graph_go/tsumego.ts";
+import type { Problem } from "../web/client/lib/graph_go/problems.ts";
 import {
   type BoardKind,
   makeBoard,
@@ -179,12 +184,33 @@ for (const want of wanted) {
     const whiteFirst = solves(graph, stones, WHITE, target);
     if (!blackFirst || whiteFirst) continue; // Not urgent for both sides: not a problem.
 
+    /** Plays the candidate through the way the screen would; it must end solved. */
+    const sound = (
+      goal: "capture" | "escape",
+      toPlay: 1 | 2,
+      answer: number,
+    ) => {
+      const problem: Problem = {
+        id: "candidate",
+        title: "",
+        board: { kind: want.kind, size: want.size, seed: want.seed },
+        black: stones.flatMap((c, v) => (c === BLACK ? [v] : [])),
+        white: stones.flatMap((c, v) => (c === WHITE ? [v] : [])),
+        toPlay,
+        goal,
+        target,
+        depth: DEPTH,
+        answer,
+      };
+      return followHints(engine, cpu, problem, graph) === null;
+    };
+
     const minDepth = [1, 3, 5, 7, 9].find((d) =>
       solves(graph, stones, BLACK, target, d)
     )!;
     if (capture < want.capture && minDepth >= 5) {
       const moves = winningMoves(graph, stones, BLACK, target);
-      if (moves.length === 1) {
+      if (moves.length === 1 && sound("capture", BLACK, moves[0])) {
         capture++;
         out.push({
           ...want,
@@ -199,7 +225,7 @@ for (const want of wanted) {
     }
     if (escape < want.escape) {
       const moves = winningMoves(graph, stones, WHITE, target);
-      if (moves.length === 1) {
+      if (moves.length === 1 && sound("escape", WHITE, moves[0])) {
         escape++;
         out.push({
           ...want,
