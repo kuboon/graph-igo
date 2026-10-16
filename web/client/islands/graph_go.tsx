@@ -6,8 +6,7 @@
  * at the end is `engine.evaluate`, which cuts the empty regions of at least `minSize` nodes out as
  * subgraphs and has the CPU module's `judge` decide whose each one is (see `lib/graph_go/`).
  *
- * The board is an SVG drawn from the graph's own node positions, so the same component draws a
- * square lattice, a honeycomb, or a random planar graph. The server renders the empty board; the
+ * The board is drawn by `lib/graph_go/board_view.tsx`. The server renders the empty board; the
  * modules load in the browser.
  */
 
@@ -16,6 +15,7 @@ import { clientEntry, css, type Handle, on } from "@remix-run/component";
 import { base } from "../base.ts";
 import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
 import { color as token, radius } from "../tokens.ts";
+import { boardView } from "../lib/graph_go/board_view.tsx";
 import {
   BOARD_KINDS,
   type BoardKind,
@@ -55,10 +55,6 @@ const REASON: Record<IllegalReason, string> = {
   outOfRange: "盤の外です。",
   invalidColor: "手番の色が不正です。",
 };
-
-/** The SVG's user units: the board fits 0..VIEW with a margin for the outer stones. */
-const VIEW = 100;
-const PAD = 6;
 
 export const GraphGo = clientEntry(
   import.meta.url,
@@ -250,11 +246,6 @@ export const GraphGo = clientEntry(
     };
 
     return () => {
-      const { points, graph } = shape;
-      const span = VIEW - 2 * PAD;
-      const px = (i: number) => PAD + points[i].x * span;
-      const py = (i: number) => PAD + points[i].y * span;
-      const stoneR = stoneRadius(shape) * span;
       const owner = new Map<number, Color>();
       for (const region of evaluation?.regions ?? []) {
         for (const v of region.nodes) owner.set(v, region.owner);
@@ -265,79 +256,15 @@ export const GraphGo = clientEntry(
 
       return (
         <div mix={layoutStyle}>
-          <svg
-            viewBox={`0 0 ${VIEW} ${VIEW}`}
-            mix={boardStyle}
-            role="img"
-            aria-label={`${graph.nodeCount} 点のグラフ盤`}
-          >
-            {graph.edges.map(([a, b]) => (
-              <line
-                key={`e${a}-${b}`}
-                x1={px(a)}
-                y1={py(a)}
-                x2={px(b)}
-                y2={py(b)}
-                mix={edgeStyle}
-              />
-            ))}
-            {stones.map((c, v) => {
-              const x = px(v);
-              const y = py(v);
-              const territory = c === EMPTY ? owner.get(v) : undefined;
-              return (
-                <g key={`n${v}`}>
-                  {c === EMPTY
-                    ? (
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r={stoneR * 0.18}
-                        mix={pointStyle}
-                      />
-                    )
-                    : (
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r={stoneR}
-                        mix={[
-                          c === BLACK ? blackStyle : whiteStyle,
-                          atari.includes(v) ? atariStyle : null,
-                        ]}
-                      />
-                    )}
-                  {territory === BLACK || territory === WHITE
-                    ? (
-                      <rect
-                        x={x - stoneR * 0.3}
-                        y={y - stoneR * 0.3}
-                        width={stoneR * 0.6}
-                        height={stoneR * 0.6}
-                        mix={[
-                          territory === BLACK ? blackStyle : whiteStyle,
-                          territoryStyle,
-                        ]}
-                      />
-                    )
-                    : null}
-                  {lastMove === v
-                    ? <circle cx={x} cy={y} r={stoneR * 0.35} mix={lastStyle} />
-                    : null}
-                  <circle
-                    cx={x}
-                    cy={y}
-                    r={stoneR * 1.05}
-                    mix={[
-                      hitStyle,
-                      humanTurn && c === EMPTY ? playableStyle : null,
-                      on("click", () => humanMove(v)),
-                    ]}
-                  />
-                </g>
-              );
-            })}
-          </svg>
+          {boardView({
+            shape,
+            stones,
+            onPlay: humanMove,
+            playable: humanTurn,
+            lastMove,
+            atari,
+            territory: owner,
+          })}
 
           <div mix={panelStyle}>
             <p
@@ -598,16 +525,6 @@ export const GraphGo = clientEntry(
   },
 );
 
-/** A stone's radius, as a fraction of the board: just under half the shortest edge. */
-function stoneRadius({ graph, points }: BoardShape): number {
-  let shortest = Infinity;
-  for (const [a, b] of graph.edges) {
-    const d = Math.hypot(points[a].x - points[b].x, points[a].y - points[b].y);
-    if (d > 0) shortest = Math.min(shortest, d);
-  }
-  return Math.min(Number.isFinite(shortest) ? shortest * 0.46 : 0.05, 0.06);
-}
-
 // --- styles -----------------------------------------------------------------
 
 const layoutStyle = css({
@@ -618,30 +535,6 @@ const layoutStyle = css({
     gridTemplateColumns: "minmax(0, 3fr) minmax(16rem, 2fr)",
     alignItems: "start",
   },
-});
-
-const boardStyle = css({
-  width: "100%",
-  height: "auto",
-  aspectRatio: "1",
-  background: "#dcb35c",
-  borderRadius: radius.lg,
-  boxShadow: "0 1px 3px rgb(0 0 0 / 0.25)",
-  touchAction: "manipulation",
-  userSelect: "none",
-});
-
-const edgeStyle = css({ stroke: "#3b2a12", strokeWidth: 0.25 });
-const pointStyle = css({ fill: "#3b2a12" });
-const blackStyle = css({ fill: "#111", stroke: "#000", strokeWidth: 0.2 });
-const whiteStyle = css({ fill: "#f8f8f8", stroke: "#444", strokeWidth: 0.2 });
-const atariStyle = css({ stroke: "#dc2626", strokeWidth: 0.6 });
-const lastStyle = css({ fill: "#dc2626" });
-const territoryStyle = css({ opacity: 0.8 });
-const hitStyle = css({ fill: "transparent", stroke: "none" });
-const playableStyle = css({
-  cursor: "pointer",
-  "&:hover": { fill: "rgb(0 0 0 / 0.18)" },
 });
 
 const panelStyle = css({ display: "grid", gap: "0.75rem" });

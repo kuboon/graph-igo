@@ -6,19 +6,59 @@
 //!   the region's empty nodes plus the stones around it (see `graph_go_core::region::subgraph`).
 //! - `genmove` — a move for one side, by flat Monte Carlo: every candidate gets an equal share of
 //!   random games played to the end, and the one that wins most often is played.
+//! - `solve` — reads out a capture problem (tsumego): can the target group be taken, and what is
+//!   the move? See [`solve`].
 //!
 //! It links the same rulebook as the engine, so the games it plays out follow the same rules.
 
 use std::collections::VecDeque;
 
+mod solve;
+
 use graph_go_core::wire::{
-    Candidate, GenmoveRequest, GenmoveResponse, GraphSpec, JudgeResponse, Subgraph,
+    Candidate, GenmoveRequest, GenmoveResponse, GraphSpec, JudgeResponse, SolveRequest,
+    SolveResponse, Subgraph,
 };
 use graph_go_core::{empty_regions, is_player, opponent, Board, Color, Graph, BLACK, EMPTY, WHITE};
 
 graph_go_core::export_abi!();
 graph_go_core::export_json!(judge, judge_json);
 graph_go_core::export_json!(genmove, genmove_json);
+graph_go_core::export_json!(solve, solve_json);
+
+pub fn solve_json(req: SolveRequest) -> Result<SolveResponse, String> {
+    if !is_player(req.to_move) {
+        return Err(format!("toMove {} is not 1 or 2", req.to_move));
+    }
+    let graph = Graph::new(&req.position.graph)?;
+    let board = Board::new(&graph, req.position.stones, req.position.ko)?;
+    if req.target >= board.len() {
+        return Err(format!("target {} is not a node", req.target));
+    }
+    let defender = board.stones[req.target];
+    if defender == EMPTY {
+        return Ok(SolveResponse {
+            attacker: EMPTY,
+            attacker_wins: true,
+            best: None,
+            captured: true,
+            visited: 0,
+        });
+    }
+    let mut reader = solve::Reader {
+        target: req.target,
+        attacker: opponent(defender),
+        visited: 0,
+    };
+    let outcome = reader.read(&board, req.to_move, req.max_depth.min(25));
+    Ok(SolveResponse {
+        attacker: reader.attacker,
+        attacker_wins: outcome.attacker_wins,
+        best: outcome.best,
+        captured: false,
+        visited: reader.visited,
+    })
+}
 
 /// How much of a region one side has to be closer to before the region is called theirs.
 const OWNER_SHARE: f64 = 0.6;
@@ -345,5 +385,79 @@ mod tests {
         })
         .unwrap();
         assert_eq!(res.node, None);
+    }
+}
+
+#[cfg(test)]
+mod solve_tests {
+    use super::*;
+    use graph_go_core::wire::Position;
+
+    fn grid6(black: &[usize], white: &[usize]) -> (GraphSpec, Vec<Color>) {
+        let mut edges = Vec::new();
+        for y in 0..6 {
+            for x in 0..6 {
+                let v = y * 6 + x;
+                if x + 1 < 6 {
+                    edges.push([v, v + 1]);
+                }
+                if y + 1 < 6 {
+                    edges.push([v, v + 6]);
+                }
+            }
+        }
+        let mut stones = vec![EMPTY; 36];
+        for &b in black {
+            stones[b] = BLACK;
+        }
+        for &w in white {
+            stones[w] = WHITE;
+        }
+        (
+            GraphSpec {
+                node_count: 36,
+                edges,
+            },
+            stones,
+        )
+    }
+
+    fn solve(graph: &GraphSpec, stones: &[Color], to_move: Color, target: usize) -> SolveResponse {
+        solve_json(SolveRequest {
+            position: Position {
+                graph: graph.clone(),
+                stones: stones.to_vec(),
+                ko: None,
+            },
+            to_move,
+            target,
+            max_depth: 9,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn reads_out_an_edge_capture() {
+        // The white stone on the right edge at row 1 has two liberties; blocking from the inside
+        // leaves it nowhere to run.
+        let (graph, stones) = grid6(&[5, 16, 23], &[9, 11]);
+        let black = solve(&graph, &stones, BLACK, 11);
+        assert!(black.attacker_wins);
+        assert_eq!(black.attacker, BLACK);
+        assert_eq!(black.best, Some(10));
+        assert!(!solve(&graph, &stones, WHITE, 11).attacker_wins);
+    }
+
+    #[test]
+    fn many_liberties_cannot_be_caught() {
+        let (graph, stones) = grid6(&[0], &[14]);
+        let res = solve(&graph, &stones, BLACK, 14);
+        assert!(!res.attacker_wins);
+    }
+
+    #[test]
+    fn a_missing_target_counts_as_captured() {
+        let (graph, stones) = grid6(&[], &[]);
+        assert!(solve(&graph, &stones, BLACK, 3).captured);
     }
 }

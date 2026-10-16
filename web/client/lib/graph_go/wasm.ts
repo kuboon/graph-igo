@@ -116,6 +116,7 @@ export async function loadGraphGo(
     cpu: {
       judge: (subgraph) => jsonCall(cpuExports, "judge", subgraph),
       genmove: (request) => jsonCall(cpuExports, "genmove", request),
+      solve: (request) => jsonCall(cpuExports, "solve", request),
     },
   };
 }

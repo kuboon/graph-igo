@@ -119,3 +119,42 @@ Deno.test("errors come back as exceptions, not traps", () => {
       .legal,
   );
 });
+
+Deno.test("every tsumego has exactly its one answer", async () => {
+  const { PROBLEMS } = await import("../web/client/lib/graph_go/problems.ts");
+  for (const p of PROBLEMS) {
+    const { graph } = makeBoard(p.board.kind, p.board.size, p.board.seed);
+    const stones: Color[] = Array(graph.nodeCount).fill(0);
+    for (const v of p.black) stones[v] = BLACK;
+    for (const v of p.white) stones[v] = WHITE;
+    const other = p.toPlay === BLACK ? WHITE : BLACK;
+    const read = (s: Color[], toMove: 1 | 2) =>
+      cpu.solve({
+        graph,
+        stones: s,
+        toMove,
+        target: p.target,
+        maxDepth: p.depth,
+      }).attackerWins;
+    // The player wins by moving first; passing hands it to the other side.
+    assertEquals(
+      read(stones, p.toPlay),
+      p.goal === "capture",
+      `${p.id}: to play`,
+    );
+    assertEquals(
+      read(stones, other),
+      p.goal !== "capture",
+      `${p.id}: after a pass`,
+    );
+
+    const working: number[] = [];
+    for (let v = 0; v < graph.nodeCount; v++) {
+      const r = engine.play({ graph, stones, color: p.toPlay, node: v });
+      if (!r.legal) continue;
+      const attackerWins = r.stones[p.target] === 0 || read(r.stones, other);
+      if (attackerWins === (p.goal === "capture")) working.push(v);
+    }
+    assertEquals(working, [p.answer], p.id);
+  }
+});

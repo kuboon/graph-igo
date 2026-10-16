@@ -10,8 +10,8 @@
  *
  * It sits in a file of its own rather than in `router.ts` because two modules need it and one of
  * them is imported by the other: `router.ts` hands it to every page module that sets `hydrate`,
- * and `blog/mod.ts` — which builds its own `Layout` calls, being a controller rather than a page —
- * hands it to the article screen. Exporting it from `router.ts` would have `blog/mod.ts` import
+ * and `docs/mod.tsx` — which builds its own `Layout` calls, being a controller rather than a page —
+ * hands it to the article screen. Exporting it from `router.ts` would have `docs/mod.tsx` import
  * the module that imports it.
  */
 
@@ -34,23 +34,5 @@ const helper = (await assets.getScriptEntry("helper/panel.ts")).href;
 export const clientRuntime: ClientRuntime = {
   src: entry.href,
   preloads: entry.preloads,
-  helper,
-};
-
-/**
- * The same, for the SPA demo's entrypoint.
- *
- * [feature:spa]
- *
- * It is a second script rather than a flag on the first because the two start different runtimes
- * and a document gets one: `hydration.ts` hydrates islands, `spa/entry.ts` hands the runtime a
- * router. A page loads whichever it needs, and never both.
- */
-const spaEntry = await assets.getScriptEntry("spa/entry.ts");
-
-/** The `<script type="module">` the SPA demo's pages load. */
-export const spaRuntime: ClientRuntime = {
-  src: spaEntry.href,
-  preloads: spaEntry.preloads,
   helper,
 };

@@ -126,25 +126,21 @@ Worker（`web/server/worker.ts`）で答える**。ページは SSG のまま
 
 ## ステージ 2: cleanup（実装後に使わない機能を消す）
 
-`[feature:名前]` は該当する配線行のコメントにある。`grep -rn "feature:blog" web`
+`[feature:名前]` は該当する配線行のコメントにある。`grep -rn "feature:push" web`
 でその機能の編集箇所が全部出る。 消した後は
 `deno task check && deno task test && deno task build`（static）か
 `deno task check && deno task test`
 （server）が通ること。落ちるなら、消し残したものがリンクされている。
 
-| 機能             | 消すファイル                                                                                                          | 配線（編集箇所）                                                                                                                                                                                                                                      | 依存する機能            |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `hydration-demo` | `client/pages/hydration.tsx`、`client/islands/{counter,total,store}.ts(x)`、`web/tests/browser_hydration.test.ts`     | `routes.ts`、`router.tsx`、`layout.tsx` の nav                                                                                                                                                                                                        | —                       |
-| `blog`           | `client/pages/blog/`、`server/blog/`、`client/islands/share.tsx`                                                      | `routes.ts`、`router.tsx`（`blogController`）、`layout.tsx` の nav、`app.css` の share 規則、`theme.ts` の `proseStyle`、`deno.json` の `@kuboon/md` `@kuboon/share-element` `@std/front-matter`                                                      | —                       |
-| `showcase`       | `client/pages/showcase.tsx`、`client/islands/showcase/`、`server/versions.ts`                                         | `routes.ts`、`router.tsx`、`assets.ts` の `islands/showcase/*.tsx`、`layout.tsx` の nav、`deno.json` の `@remix-run/ui`、`router.test.ts` の `/showcase` 行                                                                                           | —                       |
-| `fullscreen`     | `client/pages/fullscreen.tsx`、`client/islands/fullscreen-game.tsx`                                                   | `routes.ts`、`router.tsx`、`layout.tsx` の nav、`PageModule` の `viewport`/`bare`                                                                                                                                                                     | —                       |
-| `spa`            | `client/pages/spa.tsx`、`client/spa/`                                                                                 | `routes.ts`、`router.tsx`（`spa` controller、`spaRuntime`）、`assets.ts` の `spa/entry.ts`、`runtime.ts`、`layout.tsx` の `documentLinks` と nav、`nav_auth.tsx` の `documentLinks`、`deno.json` の `@remix-run/spa`                                  | —                       |
-| `helper`         | `client/helper/`                                                                                                      | `assets.ts` の `helper/panel.ts`、`runtime.ts` の `helper`、`layout.tsx` の Help ボタンと `ClientRuntime.helper`、`hydration.ts` の `installHelper()`、`spa/entry.ts`、`router.tsx` の `entryPoints` 末尾、`deno.json` の `@remix-kbn/helper-agent/*` | —                       |
-| `signin`         | `client/islands/{nav_auth,signin_card}.tsx`、`client/session.ts`、`client/idp.ts`、`client/pages/my.tsx`              | `routes.ts` の `my`、`layout.tsx` の `<NavAuth>`、`router.tsx`、`deno.json` の `@kuboon/dpop`                                                                                                                                                         | `push` は signin に依存 |
-| `push`           | `client/islands/push_card.tsx`、`client/lib/push/`、`client/sw.js`                                                    | `router.tsx` の `/sw.js` ルートと `entryPoints`、`pages/my.tsx` の `<PushCard>`                                                                                                                                                                       | `signin`                |
-| `server-send`    | `server/lib/push/`、`server/lib/signing-key*`、`server/controllers/api/notify.ts`、`server/controllers/well_known.ts` | `routes.ts` の `jwks` と `api.notify`、`router.tsx`、`worker.ts`、`push_card.tsx` の「サーバーから送信」、`server/config.ts` の `RP_*`                                                                                                                | `push`、server モード   |
-| `turso`          | `server/lib/turso/`、`server/controllers/api/turso.ts`、`web/tests/turso_*`                                           | `routes.ts` の `api.turso`、`router.tsx`、`worker.ts`、`server/config.ts` の `TURSO_*`、`deno.json` の `@libsql/client` `@remix-run/data-table` `@remix-kbn/data-table-sqlite-turso`                                                                  | server モード           |
-| `protected-api`  | `server/controllers/api/controller.ts`、`server/middleware/dpop.ts`、`packages/*`                                     | `routes.ts` の `api.protected`、`router.tsx`、`worker.ts`、`deno.json` の `@scope/*` と workspace                                                                                                                                                     | server モード           |
+| 機能            | 消すファイル                                                                                                          | 配線（編集箇所）                                                                                                                                                                                                                                      | 依存する機能            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `fullscreen`    | `client/pages/fullscreen.tsx`、`client/islands/fullscreen-game.tsx`                                                   | `routes.ts`、`router.tsx`、`layout.tsx` の nav、`PageModule` の `viewport`/`bare`                                                                                                                                                                     | —                       |
+| `helper`        | `client/helper/`                                                                                                      | `assets.ts` の `helper/panel.ts`、`runtime.ts` の `helper`、`layout.tsx` の Help ボタンと `ClientRuntime.helper`、`hydration.ts` の `installHelper()`、`spa/entry.ts`、`router.tsx` の `entryPoints` 末尾、`deno.json` の `@remix-kbn/helper-agent/*` | —                       |
+| `signin`        | `client/islands/{nav_auth,signin_card}.tsx`、`client/session.ts`、`client/idp.ts`、`client/pages/my.tsx`              | `routes.ts` の `my`、`layout.tsx` の `<NavAuth>`、`router.tsx`、`deno.json` の `@kuboon/dpop`                                                                                                                                                         | `push` は signin に依存 |
+| `push`          | `client/islands/push_card.tsx`、`client/lib/push/`、`client/sw.js`                                                    | `router.tsx` の `/sw.js` ルートと `entryPoints`、`pages/my.tsx` の `<PushCard>`                                                                                                                                                                       | `signin`                |
+| `server-send`   | `server/lib/push/`、`server/lib/signing-key*`、`server/controllers/api/notify.ts`、`server/controllers/well_known.ts` | `routes.ts` の `jwks` と `api.notify`、`router.tsx`、`worker.ts`、`push_card.tsx` の「サーバーから送信」、`server/config.ts` の `RP_*`                                                                                                                | `push`、server モード   |
+| `turso`         | `server/lib/turso/`、`server/controllers/api/turso.ts`、`web/tests/turso_*`                                           | `routes.ts` の `api.turso`、`router.tsx`、`worker.ts`、`server/config.ts` の `TURSO_*`、`deno.json` の `@libsql/client` `@remix-run/data-table` `@remix-kbn/data-table-sqlite-turso`                                                                  | server モード           |
+| `protected-api` | `server/controllers/api/controller.ts`、`server/middleware/dpop.ts`、`packages/*`                                     | `routes.ts` の `api.protected`、`router.tsx`、`worker.ts`、`deno.json` の `@scope/*` と workspace                                                                                                                                                     | server モード           |
 
 `api` の中身が全部消えたら、`routes.ts` の `api` 自体と `router.tsx` の `api`
 controller も消す。 `og/`（社会カード）は全ページが使うので残す。要らなければ
@@ -162,22 +158,9 @@ controller も消す。 `og/`（社会カード）は全ページが使うので
 
 ## 覚えておくこと
 
-- `@remix-run/render-middleware` と `@remix-run/spa` は 1.0.0 まで、
-  `render-middleware@0.3.3`（`ui@0.11` と組み合わせると `<body>` が空で返る）と
-  `spa@0.1.4`（takeover 後に `<body>` を空にする）を避けるため exact pin
-  していた。1.0.0 では `^1.0.0` で、`/blog` の HTML に本文があり
-  `deno task test:browser`
-  （`web/tests/spa_navigation.test.ts`）が通ることを確認済み。上げるときは同じ
-  二点を確認する。
-- コンポーネントランタイムは `@remix-run/component`（`ui`
-  ではない）。`@remix-run/ui` は headless プリミティブ（`/accordion` `/anchor`
-  `/animation` `/combobox` `/listbox` `/menu` `/popover` `/select` `/tabs`
-  `/toggle`）だけで、styled コンポーネントは無い。showcase はこの 10
-  個すべてのデモを持ち、見た目は app 側の `css()`。`ui@0.11` にあった styled の
-  Button / Input / Checkbox / Radio / Breadcrumbs は `0.12`
-  で消えたので、デモも無い。
-- SPA ページ（`@remix-run/spa`）はブラウザ側でシェルを描画し、island を hydrate
-  できない。そのため `layout.tsx` は `documentLinks` のとき `NavAuth` の代わりに
-  `/my` への素のリンクを出す。
+- `@remix-run/render-middleware` は 1.0.0 まで、`render-middleware@0.3.3`
+  （`<body>` が空で返る）を避けるため exact pin していた。1.0.0 では `^1.0.0`
+  で、`/docs` の HTML に本文があることを確認済み。上げるときは同じ点を確認する。
+- コンポーネントランタイムは `@remix-run/component`。
 - 追加した `import` は `deno.json`（ルート）にだけ書く。メンバー側の `deno.json`
   には書かない。

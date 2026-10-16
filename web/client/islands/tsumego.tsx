@@ -1,0 +1,407 @@
+/**
+ * Tsumego — capture-or-escape problems on graph boards, answered by the CPU's reading.
+ *
+ * The player moves; the engine says what the move does; the CPU module's `solve` reads the fight
+ * out from there and plays the other side's best reply. A capture problem is solved when the
+ * target group comes off the board, and failed the moment the reading says it can get away. An
+ * escape problem is solved the moment the reading says black can no longer catch it within the
+ * problem's depth, and failed when it is captured. The problems are in `lib/graph_go/problems.ts`.
+ */
+
+import { clientEntry, css, type Handle, on } from "@remix-run/component";
+
+import { base } from "../base.ts";
+import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
+import { color as token, radius } from "../tokens.ts";
+import { boardView } from "../lib/graph_go/board_view.tsx";
+import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
+import { type Problem, PROBLEMS } from "../lib/graph_go/problems.ts";
+import {
+  BLACK,
+  type Color,
+  EMPTY,
+  type IllegalReason,
+  opponent,
+  type Player,
+  WHITE,
+} from "../lib/graph_go/types.ts";
+import { type GraphGo as Modules, loadGraphGo } from "../lib/graph_go/wasm.ts";
+
+type Status = "playing" | "solved" | "failed";
+
+const NAME: Record<Player, string> = { 1: "黒", 2: "白" };
+
+const REASON: Record<IllegalReason, string> = {
+  occupied: "そこには既に石があります。",
+  ko: "コウです。すぐには取り返せません。",
+  suicide: "自殺手になるので打てません。",
+  outOfRange: "盤の外です。",
+  invalidColor: "手番の色が不正です。",
+};
+
+/** How long the CPU's reply waits, so the player sees their own move land first. */
+const REPLY_DELAY = 350;
+
+export const Tsumego = clientEntry(
+  import.meta.url,
+  function Tsumego(handle: Handle) {
+    let modules: Modules | null = null;
+    let loadError: string | null = null;
+
+    let index = 0;
+    let problem: Problem = PROBLEMS[0];
+    let shape: BoardShape = makeBoard("grid", 2);
+    let stones: Color[] = [];
+    let ko: number | null = null;
+    let lastMove: number | null = null;
+    let moves = 0;
+    let status: Status = "playing";
+    let thinking = false;
+    let hint: number | null = null;
+    let message = "";
+    /** Bumped on every reset, so a reply still in its timeout knows to drop. */
+    let generation = 0;
+
+    function goal(p: Problem): string {
+      return p.goal === "capture"
+        ? "黒先。青で囲んだ白を取ってください。"
+        : "白先。青で囲んだ白を逃がしてください。";
+    }
+
+    function load(i: number): void {
+      index = (i + PROBLEMS.length) % PROBLEMS.length;
+      problem = PROBLEMS[index];
+      const { kind, size, seed } = problem.board;
+      shape = makeBoard(kind, size, seed);
+      stones = Array(shape.graph.nodeCount).fill(EMPTY);
+      for (const v of problem.black) stones[v] = BLACK;
+      for (const v of problem.white) stones[v] = WHITE;
+      ko = null;
+      lastMove = null;
+      moves = 0;
+      status = "playing";
+      thinking = false;
+      hint = null;
+      message = goal(problem);
+      generation++;
+    }
+    load(0);
+
+    const player = (): Player => problem.toPlay;
+
+    /** The group the problem is about, for the board to ring. */
+    function targetGroup(): number[] {
+      if (stones[problem.target] === EMPTY) return [];
+      const color = stones[problem.target];
+      const group = [problem.target];
+      const seen = new Set(group);
+      const adjacency = neighbours(shape);
+      for (let i = 0; i < group.length; i++) {
+        for (const u of adjacency[group[i]]) {
+          if (!seen.has(u) && stones[u] === color) {
+            seen.add(u);
+            group.push(u);
+          }
+        }
+      }
+      return group;
+    }
+
+    function play(color: Player, node: number | null): boolean {
+      const result = modules!.engine.play({
+        graph: shape.graph,
+        stones,
+        ko,
+        color,
+        node,
+      });
+      if (!result.legal) {
+        message = REASON[result.reason ?? "occupied"];
+        return false;
+      }
+      stones = result.stones;
+      ko = result.ko;
+      lastMove = node;
+      moves++;
+      return true;
+    }
+
+    function read(toMove: Player) {
+      return modules!.cpu.solve({
+        graph: shape.graph,
+        stones,
+        ko,
+        toMove,
+        target: problem.target,
+        maxDepth: problem.depth,
+      });
+    }
+
+    const captured = () => stones[problem.target] === EMPTY;
+
+    function onPlay(node: number): void {
+      if (!modules || thinking || status !== "playing") return;
+      if (!play(player(), node)) {
+        void handle.update();
+        return;
+      }
+      hint = null;
+      if (problem.goal === "capture" && captured()) {
+        status = "solved";
+        message = "正解! 取れました。";
+        void handle.update();
+        return;
+      }
+      thinking = true;
+      message = "CPU が読んでいます…";
+      void handle.update();
+
+      const mine = generation;
+      setTimeout(() => {
+        if (mine !== generation || !modules) return;
+        reply();
+        thinking = false;
+        void handle.update();
+      }, REPLY_DELAY);
+    }
+
+    /** The CPU's side of the fight, after the player's move. */
+    function reply(): void {
+      const cpu = opponent(player());
+      const reading = read(cpu);
+      if (problem.goal === "capture") {
+        // White to move: does it get away from here?
+        play(cpu, reading.move);
+        if (!reading.attackerWins) {
+          status = "failed";
+          message = "不正解。白に逃げられます。";
+        } else {message = `白は${
+            reading.move === null ? "パス" : "抵抗"
+          }。続けてください。`;}
+      } else {
+        // Black to move: can it still catch the group?
+        if (!reading.attackerWins) {
+          status = "solved";
+          message = "正解! 逃げ切りました。";
+          return;
+        }
+        play(cpu, reading.move);
+        if (captured()) {
+          status = "failed";
+          message = "不正解。取られてしまいました。";
+        } else message = "黒が追ってきます。続けてください。";
+      }
+    }
+
+    function showHint(): void {
+      if (!modules || thinking || status !== "playing") return;
+      const reading = read(player());
+      const works = problem.goal === "capture"
+        ? reading.attackerWins
+        : !reading.attackerWins;
+      hint = works ? reading.move : null;
+      message = hint === null
+        ? "ここからでは、もう手がありません。やり直してください。"
+        : "青い印のところが読みの答えです。";
+      void handle.update();
+    }
+
+    function goTo(i: number): void {
+      load(i);
+      void handle.update();
+    }
+
+    handle.queueTask(async () => {
+      try {
+        modules = await loadGraphGo(
+          `${base}/static/wasm/engine.wasm`,
+          `${base}/static/wasm/cpu.wasm`,
+        );
+      } catch (e) {
+        loadError = e instanceof Error ? e.message : String(e);
+      }
+      void handle.update();
+    });
+
+    return () => {
+      const ready = modules !== null;
+      const playable = ready && !thinking && status === "playing";
+      const kind = loadError
+        ? "error"
+        : status === "solved"
+        ? "success"
+        : status === "failed"
+        ? "warning"
+        : "info";
+
+      return (
+        <div mix={layoutStyle}>
+          {boardView({
+            shape,
+            stones,
+            onPlay,
+            playable,
+            lastMove,
+            marked: targetGroup(),
+            hint,
+          })}
+
+          <div mix={panelStyle}>
+            <div mix={rowStyle}>
+              <button
+                type="button"
+                aria-label="前の問題"
+                mix={[actionStyle, on("click", () => goTo(index - 1))]}
+              >
+                ←
+              </button>
+              <select
+                aria-label="問題"
+                mix={[
+                  selectStyle,
+                  on("change", (event) => {
+                    goTo(
+                      Number((event.currentTarget as HTMLSelectElement).value),
+                    );
+                  }),
+                ]}
+              >
+                {PROBLEMS.map((p, i) => (
+                  <option key={p.id} value={String(i)} selected={i === index}>
+                    {i + 1}. {p.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                aria-label="次の問題"
+                mix={[actionStyle, on("click", () => goTo(index + 1))]}
+              >
+                →
+              </button>
+            </div>
+
+            <h2 mix={titleStyle}>{problem.title}</h2>
+            <p mix={alertStyle} data-kind={kind} aria-live="polite">
+              {loadError
+                ? `wasm の読み込みに失敗しました: ${loadError}`
+                : !ready
+                ? "wasm を読み込み中…"
+                : message}
+            </p>
+
+            <dl mix={statsStyle}>
+              <div>
+                <dt>あなた</dt>
+                <dd>{NAME[player()]}</dd>
+              </div>
+              <div>
+                <dt>手数</dt>
+                <dd>{moves}</dd>
+              </div>
+              <div>
+                <dt>読みの深さ</dt>
+                <dd>{problem.depth} 手</dd>
+              </div>
+            </dl>
+
+            <div mix={rowStyle}>
+              <button
+                type="button"
+                disabled={!ready}
+                mix={[actionStyle, on("click", () => goTo(index))]}
+              >
+                やり直す
+              </button>
+              <button
+                type="button"
+                disabled={!playable}
+                mix={[actionStyle, on("click", showHint)]}
+              >
+                ヒント
+              </button>
+              {status === "solved"
+                ? (
+                  <button
+                    type="button"
+                    mix={[
+                      actionStyle,
+                      primaryStyle,
+                      on("click", () => goTo(index + 1)),
+                    ]}
+                  >
+                    次の問題へ
+                  </button>
+                )
+                : null}
+            </div>
+
+            <p mix={mutedStyle}>
+              「逃げ切り」は、黒がもう {problem.depth}{" "}
+              手以内には取れないと CPU が読み切った状態です。
+            </p>
+          </div>
+        </div>
+      );
+    };
+  },
+);
+
+/** Each node's neighbours, for following the target's group. */
+function neighbours({ graph }: BoardShape): number[][] {
+  const adjacency: number[][] = Array.from(
+    { length: graph.nodeCount },
+    () => [],
+  );
+  for (const [a, b] of graph.edges) {
+    adjacency[a].push(b);
+    adjacency[b].push(a);
+  }
+  return adjacency;
+}
+
+// --- styles -----------------------------------------------------------------
+
+const layoutStyle = css({
+  display: "grid",
+  gap: "1.25rem",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  "@media (min-width: 56rem)": {
+    gridTemplateColumns: "minmax(0, 3fr) minmax(16rem, 2fr)",
+    alignItems: "start",
+  },
+});
+
+const panelStyle = css({ display: "grid", gap: "0.75rem" });
+
+const rowStyle = css({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "0.5rem",
+});
+
+const titleStyle = css({ margin: 0, fontSize: "1.2rem" });
+
+const statsStyle = css({
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.25rem 1.5rem",
+  margin: 0,
+  "& > div": { display: "flex", gap: "0.5rem" },
+  "& dt": { color: token.muted },
+  "& dd": { margin: 0, fontWeight: 600, fontVariantNumeric: "tabular-nums" },
+});
+
+const mutedStyle = css({ color: token.muted, fontSize: "0.85rem", margin: 0 });
+
+const selectStyle = css({
+  font: "inherit",
+  flex: "1 1 10rem",
+  minWidth: 0,
+  padding: "0.35rem 0.5rem",
+  border: `1px solid ${token.border}`,
+  borderRadius: radius.md,
+  background: token.bg,
+  color: token.fg,
+});
