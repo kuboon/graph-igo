@@ -265,6 +265,7 @@ export const GraphGo = clientEntry(
           stones,
           onPlay: humanMove,
           playable: humanTurn,
+          ghost: toMove,
           lastMove,
           atari,
           territory: owner,

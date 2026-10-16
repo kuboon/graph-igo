@@ -18,6 +18,11 @@ export interface BoardViewProps {
   /** Called with the node clicked; only while `playable`. */
   onPlay(node: number): void;
   playable: boolean;
+  /**
+   * Whose stone a click would place. Hovering (or pressing) a playable point shows a see-through
+   * stone of this colour there, so it is obvious which side is to play.
+   */
+  ghost?: Color;
   lastMove?: number | null;
   /** Stones to ring in red: left in atari by the last move. */
   atari?: readonly number[];
@@ -106,7 +111,13 @@ export function boardView(props: BoardViewProps): RemixNode {
               r={r * 1.05}
               mix={[
                 hitStyle,
-                props.playable && c === EMPTY ? playableStyle : null,
+                props.playable && c === EMPTY
+                  ? props.ghost === BLACK
+                    ? ghostBlackStyle
+                    : props.ghost === WHITE
+                    ? ghostWhiteStyle
+                    : playableStyle
+                  : null,
                 on("click", () => {
                   if (props.playable) props.onPlay(v);
                 }),
@@ -158,4 +169,41 @@ const hitStyle = css({ fill: "transparent", stroke: "none" });
 const playableStyle = css({
   cursor: "pointer",
   "&:hover": { fill: "rgb(0 0 0 / 0.18)" },
+});
+
+/** A see-through stone of the colour to play, on the point under the pointer or finger. */
+const ghostBlackStyle = css({
+  cursor: "pointer",
+  "&:hover, &:active": { fill: "rgb(17 17 17 / 0.5)" },
+});
+const ghostWhiteStyle = css({
+  cursor: "pointer",
+  "&:hover, &:active": {
+    fill: "rgb(248 248 248 / 0.75)",
+    stroke: "#444",
+    strokeWidth: 0.2,
+  },
+});
+
+/** A stone the size of the text around it, for saying "you are white" next to a title. */
+export function stoneIcon(color: Color): RemixNode {
+  return (
+    <svg viewBox="0 0 10 10" mix={iconStyle} aria-hidden="true">
+      <circle
+        cx={5}
+        cy={5}
+        r={4.4}
+        mix={color === BLACK ? blackStyle : whiteStyle}
+      />
+    </svg>
+  );
+}
+
+const iconStyle = css({
+  display: "inline-block",
+  width: "1em",
+  height: "1em",
+  verticalAlign: "-0.125em",
+  // Outlined in the text's muted colour, so a black stone still shows on a dark page.
+  "& circle": { strokeWidth: 0.6, stroke: "var(--muted)" },
 });

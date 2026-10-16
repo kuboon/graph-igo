@@ -19,7 +19,7 @@ import { clientEntry, css, type Handle, on } from "@remix-run/component";
 import { base } from "../base.ts";
 import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
 import { color as token, radius } from "../tokens.ts";
-import { boardView } from "../lib/graph_go/board_view.tsx";
+import { boardView, stoneIcon } from "../lib/graph_go/board_view.tsx";
 import { gameFrame } from "../lib/graph_go/game_frame.tsx";
 import { onFullscreenChange } from "../lib/fullscreen.ts";
 import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
@@ -315,6 +315,7 @@ export const Tsumego = clientEntry(
           stones,
           onPlay,
           playable,
+          ghost: verifying ? toMove : player(),
           lastMove,
           marked: targetGroup(),
           hint,
@@ -356,6 +357,14 @@ export const Tsumego = clientEntry(
             </div>
 
             <h2 mix={titleStyle}>{problem.title}</h2>
+            <p mix={youStyle}>
+              {stoneIcon(verifying ? toMove : player())}
+              <span>
+                {verifying
+                  ? `検証中: ${NAME[toMove]}番`
+                  : `あなたは${NAME[player()]}です`}
+              </span>
+            </p>
             <p mix={alertStyle} data-kind={kind} aria-live="polite">
               {loadError
                 ? `wasm の読み込みに失敗しました: ${loadError}`
@@ -365,19 +374,6 @@ export const Tsumego = clientEntry(
             </p>
 
             <dl mix={statsStyle}>
-              {verifying
-                ? (
-                  <div>
-                    <dt>手番</dt>
-                    <dd>{NAME[toMove]}</dd>
-                  </div>
-                )
-                : (
-                  <div>
-                    <dt>あなた</dt>
-                    <dd>{NAME[player()]}</dd>
-                  </div>
-                )}
               <div>
                 <dt>手数</dt>
                 <dd>{moves}</dd>
@@ -505,6 +501,17 @@ const rowStyle = css({
 });
 
 const titleStyle = css({ margin: 0, fontSize: "1.2rem" });
+
+/** Whose side the player is on, big enough not to be missed. */
+const youStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  margin: 0,
+  fontSize: "1.1rem",
+  fontWeight: 600,
+  "& svg": { width: "1.6em", height: "1.6em" },
+});
 
 const statsStyle = css({
   display: "flex",
