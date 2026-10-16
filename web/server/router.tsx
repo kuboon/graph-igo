@@ -45,12 +45,6 @@ import { versions } from "./versions.ts"; // [feature:showcase]
 import * as Hydration from "../client/pages/hydration.tsx";
 import * as My from "../client/pages/my.tsx";
 
-// [feature:protected-api] / [feature:server-send] / [feature:turso]: the server API.
-import { apiController } from "./controllers/api/controller.ts";
-import { notifyAction } from "./controllers/api/notify.ts";
-import { tursoAction } from "./controllers/api/turso.ts";
-import { jwksAction } from "./controllers/well_known.ts";
-
 /** Deploy path prefix. The build strips it back off when writing, so output lands at the root. */
 export { base };
 
@@ -136,20 +130,6 @@ const top = createController(routes, {
       ),
     hydration: pageAction(routes.hydration, Hydration),
     my: pageAction(routes.my, My),
-    jwks: jwksAction, // [feature:server-send]
-  },
-});
-
-/**
- * The server-only API. Static builds never reach it — see the header.
- *
- * `routes.api.protected` is a map of its own, owned by `apiController`, because the DPoP
- * middleware belongs to those two routes and not to `notify`/`turso`.
- */
-const api = createController(routes.api, {
-  actions: {
-    notify: notifyAction, // [feature:server-send]
-    turso: tursoAction, // [feature:turso]
   },
 });
 
@@ -211,8 +191,6 @@ router.map(routes, top);
 router.map(routes.spa, spa);
 // [feature:blog] Both blog routes at once: the listing, and one article.
 router.map(routes.blog, blogController);
-router.map(routes.api, api);
-router.map(routes.api.protected, apiController); // [feature:protected-api]
 
 router.get(`${base}/static/*path`, ({ request }) => staticFiles.fetch(request));
 router.get(`${assetsPath}/*path`, ({ request }) => assets.fetch(request));
@@ -234,13 +212,16 @@ router.get(
  * Where the static crawl starts.
  *
  * Pages are reached by following links from `/`. The exceptions are things nothing links to: the
- * social cards (an `og:image` is an absolute URL meant for someone else's server) and the service
- * worker (the push manager registers it by URL from script). `/api/*` is deliberately absent.
+ * social cards (an `og:image` is an absolute URL meant for someone else's server), the service
+ * worker (the push manager registers it by URL from script) and the game's wasm modules.
  */
 export const entryPoints: readonly string[] = [
   "/",
   ...ogPaths(),
   "/sw.js", // [feature:push]
+  // The game's wasm modules: fetched by script (`client/lib/graph_go/wasm.ts`), never linked.
+  "/static/wasm/engine.wasm",
+  "/static/wasm/cpu.wasm",
   // [feature:helper] The chat's chunk is only named by an attribute on the help button, which a
   // link-following crawl never reads — see `client/helper/install.ts`.
   `/${stripBase(clientRuntime.helper, base)}`,

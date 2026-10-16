@@ -1,0 +1,4 @@
+# rustup installs the wasm target on first use, so `cargo build` needs no setup step.
+[toolchain]
+channel = "stable"
+targets = ["wasm32-unknown-unknown"]

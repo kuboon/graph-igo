@@ -18,7 +18,7 @@
  *   shapes are stated here — a static deploy simply has no server to answer them.
  */
 
-import { get, post, route } from "@remix-run/fetch-router/routes";
+import { get, route } from "@remix-run/fetch-router/routes";
 
 import { base } from "./base.ts";
 
@@ -42,18 +42,5 @@ export const routes = route(base, {
     index: get("/"),
     /** One article. Articles are Markdown files; `server/blog/` answers this by reading the slug's file. */
     show: get("/:slug"),
-  }),
-  // [feature:server-send] RP public JWKS — lets the IdP verify our `private_key_jwt` assertions.
-  jwks: get("/.well-known/jwks.json"),
-  api: route("api", {
-    // [feature:server-send] Server-initiated push fan-out (delegates to the IdP). Not DPoP-protected.
-    notify: post("/notify"),
-    // [feature:turso] Turso (libSQL) + @remix-run/data-table sample.
-    turso: get("/turso"),
-    // [feature:protected-api] DPoP-protected JSON endpoints; `server/router.tsx` puts the DPoP middleware on this group.
-    protected: route("protected", {
-      get: get("/"),
-      post: post("/"),
-    }),
   }),
 });

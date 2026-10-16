@@ -15,8 +15,8 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno task check
+      # rustup on the runner installs the wasm32 target from wasm/rust-toolchain.toml.
+      - run: deno task test:wasm
       - run: deno task test
       - run: deno task build
-      - run: deno task build:cf
-      - run: deno task cf deploy --prebuilt --dry-run
       - run: deno task test:browser

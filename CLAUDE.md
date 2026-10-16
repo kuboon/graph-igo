@@ -1,7 +1,11 @@
-# deno-remix-tmpl
+# graph-igo
 
-Remix v3 + Deno のテンプレート。DPoP (RFC 9449) セッションマネージャーと
-id.kbn.one 連携の push 通知を含む。
+任意のグラフ上で打つ囲碁。ルールエンジンと CPU を Rust で書き、それぞれ別の wasm
+モジュールにして、`web/` (Remix v3 + Deno、**static モード** = GitHub Pages
+のみ、client only) で遊べるようにしている。
+
+`deno-remix-tmpl` から作った派生アプリ。ステップ 0 (static モード) とステージ 1
+は済み。`TEMPLATE.md` のステージ 2 (使わないデモ機能の削除) は未実施。
 
 ## このリポジトリは何か（最初に判定する）
 
@@ -42,125 +46,60 @@ id.kbn.one 連携の push 通知を含む。
 
 ## 構造
 
-- `KvRepo` 抽象は [jsr:@kuboon/kv](https://jsr.io/@kuboon/kv) を利用 (memory /
-  Deno KV / Turso libSQL)。
-- `packages/session-storage-kv/` — `@remix-run/session` の `SessionStorage` を
-  `KvRepo` で実装。
-- `packages/remix-dpop-session-middleware/` — DPoP セッション middleware (Remix
-  v3 fetch-router 用)。`context.get(DpopSession)` でアクセスでき、
-  `@remix-run/session` の `Session` と共存可能。DPoP proof 生成・検証は
-  [jsr:@kuboon/dpop](https://jsr.io/@kuboon/dpop) を利用。
-- `web/` — Remix v3 リファレンス Web アプリ (Cloudflare Workers へ server
-  として、GitHub Pages
-  へ静的サイトとして同時にデプロイ。派生アプリはどちらか一方を選ぶ —
-  `TEMPLATE.md`)
-  - `web/client/` — ブラウザに渡るもの全て (routes / pages / islands / layout /
-    static)。`deno.ns` 無しで型チェックされる
-  - `web/server/` — router・asset bundler・API・config・og 画像
-  - `/my` — id.kbn.one を IdP として使うサインインフロー +
-    プッシュ通知のサンプル
+- `wasm/` — Rust の cargo workspace。`rust-toolchain.toml` が wasm32 target
+  を入れる。
+  - `core/` (`graph-go-core`) — 共通のルールブック。グラフ (CSR
+    隣接)、盤面と着手 (取り・コウ・自殺手)、空き領域の抽出と部分グラフ化、JSON
+    の wire 型 (`wire.rs`)、wasm の呼び出し規約 (`abi.rs`)。
+  - `engine/` → `engine.wasm`: `play` (次の 1 手で何が起きるか)、`regions`
+    (空きが n 以上連なる部分グラフ)、`evaluate` (部分グラフを CPU の `judge`
+    に投げて地を数える。CPU は import `cpu.judge` / `cpu.take_response`
+    経由で呼ぶ)。
+  - `cpu/` → `cpu.wasm`: `judge` (部分グラフが黒白どちらの地か)、`genmove`
+    (原始モンテカルロ)。`core`
+    をリンクしているので同じルールでプレイアウトする。
+  - `graph_go_test.ts` — 両 wasm を JS ローダー越しに叩く Deno テスト。
+- 呼び出し規約: JSON を `alloc` したメモリに書き、`fn(ptr, len)` が返す長さ分を
+  `result_ptr()` から読む。失敗は trap ではなく `{"error": "..."}`。 色は `0` 空
+  / `1` 黒 / `2` 白、`null` の着手はパス。
+- `web/client/lib/graph_go/` — `wasm.ts` (ロードと engine→CPU
+  の接続)、`types.ts` (wire 型の TS 版。`wire.rs` を変えたらここも)、`graphs.ts`
+  (盤のプリセット:
+  正方格子・三角格子・蜂の巣・同心円・ランダムなガブリエルグラフ)。
+- `web/client/islands/graph_go.tsx` — 盤 (SVG) と対局 UI。トップページ
+  (`pages/index.tsx`) に置いている。
+- wasm は `deno task build:wasm` が `web/client/static/wasm/` に出す (git
+  管理外)。`dev` / `serve` / `build` / `test` はこれに依存しているので先に走る。
+  静的ビルドは `router.tsx` の `entryPoints` で `.wasm` を拾う (スクリプトから
+  fetch するだけでリンクされないため)。
+- テンプレ由来の `web/` — `web/client/` はブラウザに渡るもの全て (routes / pages
+  / islands / layout / static、`deno.ns` 無しで型チェック)、`web/server/` は
+  router・asset bundler・og 画像 (静的ビルドのためだけにある)。`/my` (id.kbn.one
+  サインイン + push 通知) などのデモはまだ残っている。
 
-## プッシュ通知 (id.kbn.one 連携)
+## デプロイ (GitHub Pages)
 
-id.kbn.one を Web Push のバックエンドとして使う最小構成。購読情報は IdP
-が保持し、RP (このアプリ) は購読 UI と送信トリガーだけを持つ。
-
-- ブラウザ側 (`web/client/lib/push/`, `web/client/islands/push_card.tsx`,
-  `web/client/sw.js`):
-  - `${base}/sw.js` をこのオリジンに登録し push を受信 (`router.tsx`
-    の専用ルートが配信。scope を `${base}/` にするため `static/`
-    配下には置かない)。
-  - 購読の取得/登録/改名/削除/テストは DPoP-bound fetch で IdP の
-    `${IDP_ORIGIN}/push/*` を直接叩く (cross-origin)。VAPID 公開鍵も IdP
-    のもの。
-- サーバ側 (`web/server/lib/push/client.ts`, `lib/signing-key.ts`):
-  - `POST /api/notify` がサーバ起点で通知を送る。RP は ES256 鍵で
-    `private_key_jwt` クライアントアサーション ([RFC 7521]/[RFC 7523]) を作り、
-    IdP の `POST /rp/notifications` へ送信する。
-  - `GET /.well-known/jwks.json` で RP の公開鍵を配布し、IdP
-    がアサーションを検証 する (共通鍵不要。IdP は RP の JWKS を取得するだけ)。
-  - RP の `clientId` はこのアプリの origin (`RP_ORIGIN`) で、IdP の
-    `AUTHORIZE_WHITELIST` に含まれている必要がある。
-
-[RFC 7521]: https://www.rfc-editor.org/rfc/rfc7521
-[RFC 7523]: https://www.rfc-editor.org/rfc/rfc7523
+`.github/workflows/pages.yml` が `mise run build` → `deno task build`
+(`build:wasm` → `@remix-kbn/ssg`) を走らせ、router を `fetch()` でクロールして
+`web/dist` に書き出す。main は Pages ルート、PR は preview サブパス (`BASE_URL`
+から `base` が決まる)。CI ランナーの rustup が `rust-toolchain.toml` に従って
+wasm32 target を入れる。
 
 ## 環境変数
 
-env アクセスは `web/server/config.ts` に集約し、ホスト非依存にしてある。
-`loadConfig(env)` が env レコードから型付き `Config` を作り、`getConfig()` が
-ホストに応じて env を自前で取得する (配線不要): Deno は `Deno.env`、Cloudflare
-Workers は `cloudflare:workers` の `env`。後者は動的 `import()` なので、その
-モジュールを持たない Deno はロードで落ちずフォールバックできる (静的 import は
-Deno で catch 不能なエラーになる)。env は top-level await
-で起動時に一度だけ解決・ 保持するので `getConfig()` は sync。
-
-- `IDP_ORIGIN` — 外部 IdP の origin (例: `http://localhost:8000`)。 `/my`
-  ページが `${IDP_ORIGIN}/authorize` へ DPoP thumbprint と redirect_uri
-  を付けて遷移し、戻った後 `${IDP_ORIGIN}/session` で userId を取得する。
-- `RP_ORIGIN` — このアプリの公開 origin。`POST /api/notify` のクライアント
-  アサーションの `clientId`/`iss`/`sub` に使う。IdP の `AUTHORIZE_WHITELIST`
-  に登録が必要。未設定だと送信時にエラーになる。
-- `RP_SIGNING_KEY_JWK` — 任意。ES256 秘密鍵 (JWK JSON)。未設定ならプロセス毎に
-  生成
-  (開発用)。本番では固定鍵を設定し、再起動で鍵がローテートしないようにする。
 - `BASE_URL` — 静的ビルド専用。Pages のサブパス（PR プレビュー等）を `base`
-  にする。server（`deno serve` / Cloudflare）は常にルート配信なので読まない
-  （`web/server/deno.json` の `dev` 権限で ignore）。
-- `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` — `GET /api/turso` サンプル用の
-  Turso (libSQL) 接続。未設定なら 503 を返すのみ。
-
-## Turso (libSQL) + data-table サンプル
-
-`GET /api/turso` が `@remix-run/data-table` のリレーショナル API で Turso に
-アクセスし、`visits` を記録して累計を返す。Turso の `@libsql/client` は非同期
-なので、公式の同期 SQLite 実装ではなく非同期の
-[`@remix-kbn/data-table-sqlite-turso`](https://jsr.io/@remix-kbn/data-table-sqlite-turso)
-(`createTursoDatabase(client)`) を使う。クライアントは edge 対応の
-`@libsql/client/web`。詳細は `web/server/lib/turso/README.md`。
-
-## デプロイ (Cloudflare Workers + GitHub Pages)
-
-`web/server/router.tsx` が唯一のルーター定義で、素の `@remix-run/fetch-router`
-の router を default export する。ローカル (`deno serve`)
-とテストはこれをそのまま使い、デプロイは 2 通り。
-
-- **Cloudflare Workers**: `.github/workflows/cloudflare.yml` が
-  `deno task
-  build:cf` を走らせ、**静的ビルド (`web/dist`) を Workers の
-  static assets** として、**server 専用ルート (`/api/*`,
-  `/.well-known/jwks.json`) だけを Worker (`web/server/worker.ts`)**
-  で配信する。`router.tsx` は `Deno.bundle` / `Deno.readTextFile` を使うので
-  Workers では動かさない。
-  - `cloudflare.config.ts` が `cf` CLI の設定 (`assets.runWorkerFirst` で Worker
-    に回すパスを指定)。
-  - `cf build` は Wrangler か Vite プラグインを呼ぶだけで `jsr:` を解決できない
-    ので使わない。`deno bundle` で作った Worker (`web/worker-dist/worker.js`) と
-    `web/dist` を `web/server/cf_build.ts` が Build Output Specification
-    (`.cloudflare/output/v0`) に並べ、`cf deploy --prebuilt` でアップロードする
-    (`deno task cf ...` が `npm:cf` の実行)。
-  - DPoP セッションの保存先は `TURSO_DATABASE_URL` があれば Turso、無ければ
-    メモリ (isolate ごとなので本番では Turso を設定する)。
-- **GitHub Pages**: `.github/workflows/pages.yml` が `deno task build`
-  (`@remix-kbn/ssg`) を走らせ、同じ router を `fetch()` でクロールして
-  `web/dist` に静的 HTML を書き出す。クロールは `entryPoints` (`/`、og
-  画像、`/sw.js`) とそこからの リンクだけを辿る。どこからもリンクしていない
-  `/api/*` は静的化されない。 main は Pages ルート、PR は preview
-  サブパスにデプロイされる (`BASE_URL` から `base` が決まる)。
-
-静的版では API が無いので、`/my` の「サーバーから送信」(`POST /api/notify`) は
-動かない。それ以外 (DPoP + IdP は全てブラウザ → id.kbn.one の直接通信)
-は静的版でも動く。
+  にする。
 
 ## 開発
 
 ```bash
-deno task dev      # web アプリの開発サーバー起動
-deno task build    # GitHub Pages 用の静的サイトを web/dist へ生成
-deno task build:cf # 静的サイト + Worker を .cloudflare/output へ (cf deploy --prebuilt 用)
-deno task test     # パッケージ/サーバーのテスト実行
+deno task dev        # wasm をビルドしてから web の開発サーバー起動
+deno task build:wasm # engine.wasm / cpu.wasm だけビルド
+deno task build      # GitHub Pages 用の静的サイトを web/dist へ生成
+deno task test       # wasm + web の Deno テスト
+deno task test:wasm  # Rust のユニットテスト (cargo test)
 deno task test:browser  # ブラウザ smoke テスト (lightpanda)
-deno task check    # 型チェック + lint + fmt
+deno task check      # 型チェック + lint + fmt
 ```
 
 ## コーディング規約
