@@ -18,6 +18,8 @@ import { color as token, radius } from "../tokens.ts";
 import { boardView } from "../lib/graph_go/board_view.tsx";
 import { gameFrame } from "../lib/graph_go/game_frame.tsx";
 import { onFullscreenChange } from "../lib/fullscreen.ts";
+import { gameCenter, onPendingChange, unlock } from "../game_center.ts";
+import { claimLinkView } from "../lib/game_center_link.tsx";
 import {
   BOARD_KINDS,
   type BoardKind,
@@ -89,8 +91,17 @@ export const GraphGo = clientEntry(
     /** Bumped by every new game and undo, so a CPU move still in its timeout knows to drop. */
     let generation = 0;
 
+    // For the achievements: who actually played each colour this game, how strong the CPU was at
+    // its weakest, and the board the game started on (the settings can change mid-game).
+    let gameKind: BoardKind = kind;
+    let movedBy: Record<Player, Set<Seat>> = { 1: new Set(), 2: new Set() };
+    let weakestCpu = Infinity;
+
     function reset(): void {
       shape = makeBoard(kind, size, seed);
+      gameKind = kind;
+      movedBy = { 1: new Set(), 2: new Set() };
+      weakestCpu = Infinity;
       stones = Array(shape.graph.nodeCount).fill(EMPTY);
       ko = null;
       toMove = BLACK;
@@ -158,6 +169,7 @@ export const GraphGo = clientEntry(
         gameOver = true;
         parts.push("両者パスで終局。");
         judge();
+        awardWin();
       } else parts.push(`${NAME[toMove]}番です。`);
       message = parts.join(" ");
       return true;
@@ -171,6 +183,21 @@ export const GraphGo = clientEntry(
         minSize,
         komi,
       });
+    }
+
+    /** A person beat the CPU: the winner's colour was only ever played by hand, the loser's only by the CPU. */
+    function awardWin(): void {
+      const winner = evaluation?.winner;
+      if (winner !== BLACK && winner !== WHITE) return;
+      const loser = opponent(winner);
+      const byHand = (p: Player) =>
+        movedBy[p].has("human") && !movedBy[p].has("cpu");
+      const byCpu = (p: Player) =>
+        movedBy[p].has("cpu") && !movedBy[p].has("human");
+      if (!byHand(winner) || !byCpu(loser)) return;
+      void unlock("win_cpu");
+      if (gameKind !== "grid") void unlock("win_cpu_exotic");
+      if (weakestCpu >= 5000) void unlock("win_cpu_strong");
     }
 
     /** Lets the CPU move if it is its turn; after a beat, so the board paints first. */
@@ -192,6 +219,8 @@ export const GraphGo = clientEntry(
           opponentPassed: passes === 1,
         });
         thinking = false;
+        movedBy[toMove].add("cpu");
+        weakestCpu = Math.min(weakestCpu, playouts);
         apply(move.node);
         void handle.update();
         maybeCpu();
@@ -200,7 +229,8 @@ export const GraphGo = clientEntry(
 
     function humanMove(node: number | null): void {
       if (!modules || thinking || gameOver || seats[toMove] !== "human") return;
-      apply(node);
+      const color = toMove;
+      if (apply(node)) movedBy[color].add("human");
       void handle.update();
       maybeCpu();
     }
@@ -231,6 +261,11 @@ export const GraphGo = clientEntry(
 
     handle.queueTask(async () => {
       onFullscreenChange(() => void handle.update(), handle.signal);
+      handle.signal.addEventListener(
+        "abort",
+        onPendingChange(() => void handle.update()),
+      );
+      gameCenter();
       try {
         modules = await loadGraphGo(
           `${base}/static/wasm/engine.wasm`,
@@ -272,6 +307,7 @@ export const GraphGo = clientEntry(
         }),
         panel: (
           <div mix={panelStyle}>
+            {claimLinkView()}
             <p
               mix={alertStyle}
               data-kind={loadError ? "error" : "info"}

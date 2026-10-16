@@ -22,7 +22,18 @@ import { color as token, radius } from "../tokens.ts";
 import { boardView, stoneIcon } from "../lib/graph_go/board_view.tsx";
 import { gameFrame } from "../lib/graph_go/game_frame.tsx";
 import { onFullscreenChange } from "../lib/fullscreen.ts";
-import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
+import {
+  BOARD_KINDS,
+  type BoardShape,
+  makeBoard,
+} from "../lib/graph_go/graphs.ts";
+import {
+  gameCenter,
+  onPendingChange,
+  rememberSolved,
+  unlock,
+} from "../game_center.ts";
+import { claimLinkView } from "../lib/game_center_link.tsx";
 import { type Problem, PROBLEMS } from "../lib/graph_go/problems.ts";
 import { cpuReply, hintMove } from "../lib/graph_go/tsumego.ts";
 import {
@@ -72,6 +83,9 @@ export const Tsumego = clientEntry(
     /** Bumped on every reset, so a reply still in its timeout knows to drop. */
     let generation = 0;
 
+    /** Whether the hint was shown during this attempt, for the "no hint" achievement. */
+    let hintUsed = false;
+
     /** The study board after a problem is over: both sides by hand, with the reading alongside. */
     let verifying = false;
     let toMove: Player = BLACK;
@@ -107,6 +121,7 @@ export const Tsumego = clientEntry(
       generation++;
       verifying = false;
       history = [];
+      hintUsed = false;
     }
     load(0);
 
@@ -162,6 +177,7 @@ export const Tsumego = clientEntry(
       hint = null;
       if (problem.goal === "capture" && captured()) {
         status = "solved";
+        awardSolved();
         message = "正解! 取れました。";
         void handle.update();
         return;
@@ -189,6 +205,7 @@ export const Tsumego = clientEntry(
       });
       if (answer.kind === "escaped") {
         status = "solved";
+        awardSolved();
         message = "正解! 逃げ切りました。";
         return;
       }
@@ -206,6 +223,7 @@ export const Tsumego = clientEntry(
     function showHint(): void {
       if (!modules || thinking || status !== "playing") return;
       // Checked the way the screen checks a move, so the hint never disagrees with it.
+      hintUsed = true;
       hint = hintMove(modules.engine, modules.cpu, problem, {
         graph: shape.graph,
         stones,
@@ -215,6 +233,20 @@ export const Tsumego = clientEntry(
         ? "この局面からは、読みで確実な手が見つかりません。続けるか、やり直してください。"
         : "青い印のところが読みの答えです。";
       void handle.update();
+    }
+
+    /** The achievements a solved problem can bring. */
+    function awardSolved(): void {
+      const solved = rememberSolved(problem.id);
+      void unlock("tsumego_first");
+      if (!hintUsed) void unlock("tsumego_no_hint");
+      const kinds = new Set(
+        PROBLEMS.filter((p) => solved.has(p.id)).map((p) => p.board.kind),
+      );
+      if (BOARD_KINDS.every((k) => kinds.has(k.kind))) {
+        void unlock("tsumego_every_board");
+      }
+      if (PROBLEMS.every((p) => solved.has(p.id))) void unlock("tsumego_all");
     }
 
     // --- the study board ---------------------------------------------------------------
@@ -286,6 +318,11 @@ export const Tsumego = clientEntry(
 
     handle.queueTask(async () => {
       onFullscreenChange(() => void handle.update(), handle.signal);
+      handle.signal.addEventListener(
+        "abort",
+        onPendingChange(() => void handle.update()),
+      );
+      gameCenter();
       try {
         modules = await loadGraphGo(
           `${base}/static/wasm/engine.wasm`,
@@ -322,6 +359,7 @@ export const Tsumego = clientEntry(
         }),
         panel: (
           <div mix={panelStyle}>
+            {claimLinkView()}
             <div mix={rowStyle}>
               <button
                 type="button"

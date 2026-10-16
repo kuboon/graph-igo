@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@deno/loader@0.5": "0.5.0",
     "jsr:@kuboon/dpop@~0.1.2": "0.1.2",
+    "jsr:@kuboon/game-center-sdk@0.4": "0.4.0",
     "jsr:@kuboon/md@0.7": "0.7.0",
     "jsr:@remix-kbn/assets-deno@0.9": "0.9.0",
     "jsr:@remix-kbn/helper-agent@0.3": "0.3.0",
@@ -64,6 +65,9 @@
       "dependencies": [
         "jsr:@std/encoding@1.0.10"
       ]
+    },
+    "@kuboon/game-center-sdk@0.4.0": {
+      "integrity": "9da9a77ab8e25a07aeb0ec70c2ebf9a638db60b4fae0c26407386edbd6bc1390"
     },
     "@kuboon/md@0.7.0": {
       "integrity": "54f4e4d88442831fc83e33b4576e7e5f91e45d7bbfcf26038c8d4d457e290343",
@@ -2751,6 +2755,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@kuboon/dpop@~0.1.2",
+      "jsr:@kuboon/game-center-sdk@0.4",
       "jsr:@kuboon/md@0.7",
       "jsr:@remix-kbn/assets-deno@0.9",
       "jsr:@remix-kbn/helper-agent@0.3",

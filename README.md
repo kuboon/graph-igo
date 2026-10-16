@@ -8,6 +8,8 @@
   以上連なる部分グラフ) / `evaluate` (部分グラフを CPU に判定させて数える)
 - `wasm/cpu` — `judge` (部分グラフが黒白どちらの地か) / `genmove`
   (原始モンテカルロ)
+- [GameCenter](https://ga-cen.kbn.one) の実績に対応
+  (`web/client/game_center.ts`)
 - `web/` — 遊ぶページ (Remix v3 + Deno、静的サイト)
 
 ```bash
