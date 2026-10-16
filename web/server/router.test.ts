@@ -8,8 +8,9 @@ Deno.test("GET / returns the shell with nav links and the runtime script", async
   const html = await res.text();
   assertStringIncludes(html, "<!DOCTYPE html>");
   assertStringIncludes(html, "graph-igo");
-  assertStringIncludes(html, "/assets/islands/graph_go");
-  assertStringIncludes(html, 'href="/hydration"');
+  assertStringIncludes(html, 'href="/play"');
+  assertStringIncludes(html, 'href="/tsumego"');
+  assertStringIncludes(html, 'href="/docs"');
   assertStringIncludes(html, '<script type="module" src="/assets/hydration');
   // Soft navigation is the runtime's default now; no frame target attributes.
   assert(!html.includes("rmx-target"));
@@ -25,15 +26,6 @@ Deno.test("the game's wasm modules are served and crawled", async () => {
     const bytes = new Uint8Array(await res.arrayBuffer());
     assert(WebAssembly.validate(bytes), path);
   }
-});
-
-Deno.test("GET /hydration includes the Counter clientEntry marker", async () => {
-  const res = await router.fetch(new Request("http://x/hydration"));
-  assertEquals(res.status, 200);
-  const html = await res.text();
-  assertStringIncludes(html, "/assets/islands/counter");
-  assertStringIncludes(html, "Counter");
-  assertStringIncludes(html, 'aria-label="increment"');
 });
 
 Deno.test("GET /my embeds idp-origin meta", async () => {
@@ -54,10 +46,9 @@ Deno.test("GET /sw.js serves the worker with a root scope", async () => {
 
 for (
   const [path, needle] of [
-    ["/blog", "Blog"],
-    ["/blog/hello-remix-ssg", "Hello, remix-ssg"],
-    ["/showcase", "showcase"],
-    ["/spa/1", "SPA"],
+    ["/docs", "詰碁のしくみ"],
+    ["/docs/how-it-works", "cpu.judge"],
+    ["/docs/rules", "面積計算"],
   ] as const
 ) {
   Deno.test(`GET ${path} renders inside the shell`, async () => {
@@ -69,16 +60,19 @@ for (
   });
 }
 
-Deno.test("GET /fullscreen is a bare page with no shell", async () => {
-  const res = await router.fetch(new Request("http://x/fullscreen"));
-  assertEquals(res.status, 200);
-  const html = await res.text();
-  assert(!html.includes("<main"));
-  assertStringIncludes(html, "FullscreenGame");
-});
+for (const [path, island] of [["/play", "graph_go"], ["/tsumego", "tsumego"]]) {
+  Deno.test(`GET ${path} is a bare game screen`, async () => {
+    const res = await router.fetch(new Request(`http://x${path}`));
+    assertEquals(res.status, 200);
+    const html = await res.text();
+    assert(!html.includes("<main"));
+    assertStringIncludes(html, "viewport-fit=cover");
+    assertStringIncludes(html, `/assets/islands/${island}`);
+  });
+}
 
-Deno.test("GET /spa/unknown is a 404", async () => {
-  const res = await router.fetch(new Request("http://x/spa/nope"));
+Deno.test("GET /docs/unknown is a 404", async () => {
+  const res = await router.fetch(new Request("http://x/docs/nope"));
   assertEquals(res.status, 404);
   await res.body?.cancel();
 });

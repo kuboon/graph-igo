@@ -10,6 +10,10 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import { loadGraphGo } from "../web/client/lib/graph_go/wasm.ts";
 import { grid, makeBoard } from "../web/client/lib/graph_go/graphs.ts";
 import { BLACK, type Color, WHITE } from "../web/client/lib/graph_go/types.ts";
+import {
+  followHints,
+  workingMoves,
+} from "../web/client/lib/graph_go/tsumego.ts";
 
 const dir = new URL("../web/client/static/wasm/", import.meta.url);
 const { engine, cpu } = await loadGraphGo(
@@ -118,4 +122,46 @@ Deno.test("errors come back as exceptions, not traps", () => {
     engine.play({ graph: board3, stones: Array(9).fill(0), color: 1, node: 4 })
       .legal,
   );
+});
+
+Deno.test("every tsumego has exactly its one answer", async () => {
+  const { PROBLEMS } = await import("../web/client/lib/graph_go/problems.ts");
+  for (const p of PROBLEMS) {
+    const { graph } = makeBoard(p.board.kind, p.board.size, p.board.seed);
+    const stones: Color[] = Array(graph.nodeCount).fill(0);
+    for (const v of p.black) stones[v] = BLACK;
+    for (const v of p.white) stones[v] = WHITE;
+    const other = p.toPlay === BLACK ? WHITE : BLACK;
+    const read = (s: Color[], toMove: 1 | 2) =>
+      cpu.solve({
+        graph,
+        stones: s,
+        toMove,
+        target: p.target,
+        maxDepth: p.depth,
+      }).attackerWins;
+    // The player wins by moving first; passing hands it to the other side.
+    assertEquals(
+      read(stones, p.toPlay),
+      p.goal === "capture",
+      `${p.id}: to play`,
+    );
+    assertEquals(
+      read(stones, other),
+      p.goal !== "capture",
+      `${p.id}: after a pass`,
+    );
+
+    // The hint's own check: exactly the answer passes it.
+    const working = workingMoves(engine, cpu, p, { graph, stones, ko: null });
+    assertEquals(working, [p.answer], p.id);
+  }
+});
+
+Deno.test("every tsumego is solved by following the hints", async () => {
+  const { PROBLEMS } = await import("../web/client/lib/graph_go/problems.ts");
+  for (const p of PROBLEMS) {
+    const { graph } = makeBoard(p.board.kind, p.board.size, p.board.seed);
+    assertEquals(followHints(engine, cpu, p, graph), null, p.id);
+  }
 });

@@ -61,29 +61,17 @@ const replies = [
         "in the browser. A page opts in with `export const hydrate = true`, places the island, " +
         'and the shell writes one `<script type="module">` for the whole page. Every island is ' +
         "compiled as one graph, so two of them that import the same module get the same instance " +
-        "— the two counters on the home page and the total below them are exactly that. A " +
-        "page that places none, like the blog listing, ships no JavaScript at all.",
+        "— the game and tsumego boards share the wasm loader that way. A " +
+        "page that places none, like the docs listing, ships no JavaScript at all.",
     },
   },
   {
-    match: /spa|client.?side rout/i,
+    match: /docs?|解説|article|markdown/i,
     turn: {
       text:
-        "The SPA link in the header goes to a demo where a real `@remix-run/fetch-router` runs in " +
-        "the browser: the three views route without a request, and the counter on screen shows " +
-        "how many times it has. It is a document load to get in and out of, because a document " +
-        "gets one runtime and that page starts a different one from the rest of the site. This " +
-        "chat uses the same trick — see below.",
-    },
-  },
-  {
-    match: /blog|article|markdown/i,
-    turn: {
-      text:
-        "The blog is Markdown files under `server/blog/`. The listing is generated from whatever " +
-        "is on disk, so adding an article is adding a file — the article about that is the " +
-        "second one in the list. The listing ships no JavaScript; an article does, because it " +
-        "places a share button.",
+        "The docs (解説) are Markdown files under `server/docs/`. The listing is generated from " +
+        "whatever is on disk, ordered by each file's `order` front-matter, so adding an " +
+        "explanation is adding a file. Neither the listing nor an article ships JavaScript.",
     },
   },
   {
@@ -111,7 +99,7 @@ const replies = [
         "It deploys to GitHub Pages, including a preview per pull request under its own sub-path. " +
         "That sub-path is why the deploy prefix is a value the site reads rather than a string " +
         "anyone types: routes are built on it, and the browser is told it through a `<meta>` tag " +
-        "because `/repo/blog` and `/blog` are the same page under two deploys.",
+        "because `/repo/play` and `/play` are the same page under two deploys.",
     },
   },
   {
@@ -128,23 +116,13 @@ const replies = [
     },
   },
   {
-    match: /showcase|components?|remix.?ui/i,
+    match: /fullscreen|全画面|game|viewport|safe area|notch/i,
     turn: {
       text:
-        "The UI showcase has the headless `@remix-run/ui` primitives and animation helpers on one page, each a live island with " +
-        "controls to change its parameters. It is also the page that proves the bundling works: " +
-        "eighteen islands, one runtime.",
-    },
-  },
-  {
-    match: /fullscreen|game|canvas|viewport|safe area|notch/i,
-    turn: {
-      text:
-        "The fullscreen page is the frame of a game with a placeholder where the game goes: " +
-        "no site chrome, and a stage that fills whatever the browser leaves visible. One " +
-        "action gets the rest of the screen on a phone: tap to fullscreen where the " +
-        "Fullscreen API exists, scroll to fullscreen on iPhone Safari where it does not. On a " +
-        "desktop the game simply starts, and fullscreen is a button in the corner.",
+        "The game screens (対局 and 詰碁) are the whole viewport: no site chrome, the board as " +
+        "large as the screen allows, and a 全画面 button that takes them fullscreen where the " +
+        "Fullscreen API exists. iPhone Safari has no such API, so there the page simply fills " +
+        "the viewport.",
     },
   },
 ];
@@ -172,8 +150,8 @@ function fallback(input: AgentInput): DummyTurn {
   return {
     text:
       "I only know a handful of things about this site, because I am a script rather than a " +
-      "model — ask me about the static build, islands and hydration, the SPA demo, the " +
-      "blog, the social cards, deploying to GitHub Pages, or this chat itself. You can also ask " +
+      "model — ask me about the static build, islands and hydration, the " +
+      "docs, the social cards, deploying to GitHub Pages, or this chat itself. You can also ask " +
       "“what page am I on?”, or tell me about a bug and I will open a report.",
   };
 }

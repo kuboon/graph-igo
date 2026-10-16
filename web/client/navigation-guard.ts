@@ -1,7 +1,7 @@
 /**
  * The two navigations the runtime should not be handling, handed back to the browser.
  *
- * Calling `run()` — either one, `@remix-run/component`'s or `@remix-run/spa`'s — starts a Navigation API
+ * Calling `@remix-run/component`'s `run()` starts a Navigation API
  * listener that intercepts every same-origin navigation it can. Two of those are not navigations
  * at all in the sense the runtime means, and intercepting them is a regression rather than an
  * enhancement:

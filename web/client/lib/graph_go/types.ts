@@ -93,6 +93,19 @@ export interface Genmove {
   candidates: { node: number; winRate: number }[];
 }
 
+export interface Solution {
+  /** The colour trying to capture. */
+  attacker: Color;
+  /** Whether the attacker can force the capture within the depth, whoever is to move. */
+  attackerWins: boolean;
+  /** The recommended move for the side to move; `null` passes. */
+  move: number | null;
+  /** The target is already gone. */
+  captured: boolean;
+  /** Positions the reading visited. */
+  visited: number;
+}
+
 export interface Engine {
   /** What happens when `color` plays `node` (`null` passes) on the position. */
   play(position: Position & { color: Player; node: number | null }): PlayResult;
@@ -120,4 +133,8 @@ export interface Cpu {
       opponentPassed?: boolean;
     },
   ): Genmove;
+  /** Reads out whether the group at `target` can be captured, with `toMove` to play. */
+  solve(
+    request: Position & { toMove: Player; target: number; maxDepth?: number },
+  ): Solution;
 }

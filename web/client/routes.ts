@@ -10,7 +10,7 @@
  *
  * Two kinds of route live here and they are deployed differently:
  *
- * - **Pages** (`home`, `hydration`, `my`) are rendered to static HTML by the GitHub Pages build as
+ * - **Pages** (`home`, `play`, `tsumego`, `my`, `docs`) are rendered to static HTML by the GitHub Pages build as
  *   well as served from the static build by Cloudflare.
  * - **Server routes** (`jwks` and everything under `api`) only exist on the live server. Nothing
  *   links to them, so the static build's crawl never reaches them, and they are not in
@@ -24,23 +24,15 @@ import { base } from "./base.ts";
 
 export const routes = route(base, {
   home: get("/"),
-  // [feature:hydration-demo]
-  hydration: get("/hydration"),
+  /** A game on a board of your choosing, against a person or the CPU. */
+  play: get("/play"),
+  /** Capture-or-escape problems, answered by the CPU's reading. */
+  tsumego: get("/tsumego"),
   // [feature:signin] (the push card on this page is [feature:push])
   my: get("/my"),
-  // [feature:fullscreen]
-  fullscreen: get("/fullscreen"),
-  // [feature:showcase]
-  showcase: get("/showcase"),
-  // [feature:spa]
-  spa: route("spa", {
-    /** One view of the SPA demo; the build generates each as its own static file. */
-    show: get("/:id"),
-  }),
-  // [feature:blog]
-  blog: route("blog", {
+  /** The explanations. Articles are Markdown files; `server/docs/` answers these by reading them. */
+  docs: route("docs", {
     index: get("/"),
-    /** One article. Articles are Markdown files; `server/blog/` answers this by reading the slug's file. */
     show: get("/:slug"),
   }),
 });

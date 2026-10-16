@@ -1,7 +1,7 @@
 /**
- * The blog: the articles, and the routes that serve them.
+ * The explanations: Markdown articles, and the routes that serve them.
  *
- * This module is the blog's entry — `router.ts` imports `blogController` from here and nothing else.
+ * This module is their entry — `router.tsx` imports `docsController` from here and nothing else.
  * It sits in the directory the articles are in, so the files it reads are its own siblings and
  * `import.meta.dirname` is the only path involved; there is no article directory written down
  * elsewhere for this to fall out of step with.
@@ -23,12 +23,13 @@ import { markdownToHast } from "@kuboon/md";
 import { hastToElement } from "@kuboon/md/hast_to_element.ts";
 import { extract } from "@std/front-matter/yaml";
 
+import { joinJapaneseLines } from "./japanese.ts";
 import { ogImage } from "../og/mod.ts";
 import { clientRuntime } from "../runtime.ts";
 import { Layout } from "../../client/layout.tsx";
 import { routes } from "../../client/routes.ts";
-import * as Index from "../../client/pages/blog/index.tsx";
-import * as ArticlePage from "../../client/pages/blog/article.tsx";
+import * as Index from "../../client/pages/docs/index.tsx";
+import * as ArticlePage from "../../client/pages/docs/article.tsx";
 
 /** Where the articles are: right here, next to this file. */
 const articlesDir = import.meta.dirname!;
@@ -38,7 +39,8 @@ export interface Article {
   /** The file's name without its extension, which is also its URL segment. */
   slug: string;
   title: string;
-  date: string;
+  /** Where it sits in the listing, smallest first. */
+  order: number;
   summary: string;
   /** The Markdown body, front-matter removed. */
   body: string;
@@ -91,26 +93,26 @@ async function readArticle(slug: string | undefined): Promise<Article | null> {
   return {
     slug,
     title: typeof a.title === "string" ? a.title : slug,
-    date: typeof a.date === "string" ? a.date : "",
+    order: typeof a.order === "number" ? a.order : Number.MAX_SAFE_INTEGER,
     summary: typeof a.summary === "string" ? a.summary : "",
     body,
   };
 }
 
 /**
- * Every article, newest first.
+ * Every article, in its `order`.
  *
  * Read on each request rather than cached, so editing an article in the dev server is a reload
  * away — there are a handful of files, and the build reads them once.
  *
- * @returns The articles, sorted by date, descending
+ * @returns The articles, sorted by `order`, then by slug
  */
 async function listArticles(): Promise<Article[]> {
   const articles = await Promise.all(readSlugs().map(readArticle));
 
   return articles
     .filter((article): article is Article => article !== null)
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
 }
 
 /**
@@ -125,7 +127,10 @@ async function listArticles(): Promise<Article[]> {
  * @returns The body as a node tree, ready to place in a page
  */
 async function renderMarkdown(markdown: string): Promise<RemixNode> {
-  return hastToElement(await markdownToHast(markdown), createElement);
+  return hastToElement(
+    await markdownToHast(joinJapaneseLines(markdown)),
+    createElement,
+  );
 }
 
 // --- the routes -------------------------------------------------------------
@@ -144,7 +149,7 @@ const articleImages = new Map(
     ogImage(articlePath(slug), async () => {
       const article = await readArticle(slug);
       return {
-        eyebrow: "Blog",
+        eyebrow: "解説",
         title: article?.title ?? slug,
         description: article?.summary,
       };
@@ -153,10 +158,10 @@ const articleImages = new Map(
 );
 
 /** The listing's own card. */
-const indexImage = ogImage(routes.blog.index.href(), Index);
+const indexImage = ogImage(routes.docs.index.href(), Index);
 
-/** Both blog routes, for `router.map(routes.blog, blogController)`. */
-export const blogController = createController(routes.blog, {
+/** Both docs routes, for `router.map(routes.docs, docsController)`. */
+export const docsController = createController(routes.docs, {
   actions: {
     index: async (context) => (
       context.render(
@@ -212,5 +217,5 @@ export const blogController = createController(routes.blog, {
  * @returns Its path, deploy prefix included
  */
 function articlePath(slug: string): string {
-  return decodeURIComponent(routes.blog.show.href({ slug }));
+  return decodeURIComponent(routes.docs.show.href({ slug }));
 }

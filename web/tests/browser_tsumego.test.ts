@@ -48,11 +48,16 @@ async function serveLightpanda(port: number) {
   }
 }
 
+/** The text of the status line the island keeps up to date. */
+const STATUS = "[aria-live]";
+
 Deno.test({
-  name: "lightpanda: /hydration の Counter がクリックで +1 される",
+  name: "lightpanda: /tsumego が wasm を読み込み、初手に CPU が応じる",
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
+    const { PROBLEMS } = await import("../client/lib/graph_go/problems.ts");
+    const first = PROBLEMS[0];
     const cdpPort = findFreePort();
     const appPort = findFreePort();
 
@@ -71,41 +76,39 @@ Deno.test({
         const context = await browser.createBrowserContext();
         const page = await context.newPage();
 
-        await page.goto(`http://127.0.0.1:${appPort}/hydration`);
+        await page.goto(`http://127.0.0.1:${appPort}/tsumego`);
         await page.waitForFunction("globalThis.__rmxReady === true", {
           timeout: 10_000,
         });
-
-        const before = await page.$eval(
-          "output",
-          (el) => el.textContent?.trim() ?? "",
+        // The modules have loaded once the status line shows the problem's instruction.
+        await page.waitForFunction(
+          (selector: string) =>
+            document.querySelector(selector)?.textContent?.includes("先。") ??
+              false,
+          { timeout: 10_000 },
+          STATUS,
         );
 
-        await page.$eval(
-          'button[aria-label="increment"]',
-          (el) => (el as HTMLButtonElement).click(),
-        );
+        // Each node is a `<g>`; its last circle is the click target.
+        await page.evaluate((node: number) => {
+          const hits = document.querySelectorAll("svg g")[node]
+            .querySelectorAll("circle");
+          hits[hits.length - 1].dispatchEvent(
+            new MouseEvent("click", { bubbles: true }),
+          );
+        }, first.answer);
 
         await page.waitForFunction(
-          (prev: string) =>
-            document.querySelector("output")?.textContent?.trim() !== prev,
-          { timeout: 5_000 },
-          before,
+          (selector: string) => {
+            const text = document.querySelector(selector)?.textContent ?? "";
+            return text.includes("続けて") || text.includes("正解");
+          },
+          { timeout: 10_000 },
+          STATUS,
         );
-
-        const after = await page.$eval(
-          "output",
-          (el) => el.textContent?.trim() ?? "",
-        );
-
-        assertEquals(Number(after), Number(before) + 1);
-
-        // The shared-total island is a separate entrypoint: it only moves if both resolved the
-        // click store to the same module instance.
-        await page.waitForFunction(
-          () => document.querySelector("output strong")?.textContent === "1",
-          { timeout: 5_000 },
-        );
+        const status = await page.$eval(STATUS, (el) => el.textContent ?? "");
+        // The first problem takes more than one move, so the CPU answers rather than resigning.
+        assertEquals(status.includes("白が応じました"), true, status);
 
         await page.close();
         await context.close();

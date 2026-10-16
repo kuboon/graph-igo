@@ -4,7 +4,6 @@
     "jsr:@deno/loader@0.5": "0.5.0",
     "jsr:@kuboon/dpop@~0.1.2": "0.1.2",
     "jsr:@kuboon/md@0.7": "0.7.0",
-    "jsr:@kuboon/share-element@0.5": "0.5.0",
     "jsr:@remix-kbn/assets-deno@0.9": "0.9.0",
     "jsr:@remix-kbn/helper-agent@0.3": "0.3.0",
     "jsr:@remix-kbn/ssg@*": "0.13.0",
@@ -33,8 +32,6 @@
     "npm:@remix-run/component@1": "1.0.0",
     "npm:@remix-run/fetch-router@1": "1.0.0",
     "npm:@remix-run/render-middleware@1": "1.0.0_@emnapi+core@1.11.2_@emnapi+runtime@1.11.2",
-    "npm:@remix-run/spa@1": "1.0.0_@emnapi+core@1.11.2_@emnapi+runtime@1.11.2",
-    "npm:@remix-run/ui@~0.12.1": "0.12.1",
     "npm:@types/hast@^3.0.5": "3.0.5",
     "npm:@types/mdast@^4.0.4": "4.0.4",
     "npm:beautiful-mermaid@^1.1.3": "1.1.3",
@@ -88,9 +85,6 @@
         "npm:unified",
         "npm:unist-util-visit"
       ]
-    },
-    "@kuboon/share-element@0.5.0": {
-      "integrity": "6877eb66ef3e0a102a3ce3d5d702b6909a3ffbc74bec1ee60f1796d410ac8308"
     },
     "@panva/jose@6.2.3": {
       "integrity": "57cc772f01b2ac60f847a7e6ec815059762768186266ed833fb59953e9611312"
@@ -1018,20 +1012,6 @@
     },
     "@remix-run/route-pattern@1.0.0": {
       "integrity": "sha512-EsI8J5AcDpnV76lGcpwPCqCN1Vj7X2eNPqgUr+RjInTsm4iTnrGzn0iIUxpUjQ5/Ba1cAd8CMMbsA2bjEjZiyQ=="
-    },
-    "@remix-run/spa@1.0.0_@emnapi+core@1.11.2_@emnapi+runtime@1.11.2": {
-      "integrity": "sha512-nZrekR/1qggDaehmeZ1/JYdRAmuvjQw4vabM6mpb3RRkIrxzt4ZSBxnkO2QIXyrxwtUbJNIxRETBVpVOYyQtTg==",
-      "dependencies": [
-        "@remix-run/component",
-        "@remix-run/fetch-router",
-        "@remix-run/render-middleware"
-      ]
-    },
-    "@remix-run/ui@0.12.1": {
-      "integrity": "sha512-eB1qhDODNXPFQFb7Zomn8c+DlIlPwz+c6Uk70nqnEUjNxCF8GM0tcG+USG/XjaaBfdvFhvvd2GWzoINnTekxRA==",
-      "dependencies": [
-        "@remix-run/component"
-      ]
     },
     "@shikijs/core@4.5.0": {
       "integrity": "sha512-6CIgwq+bt2JZ3OSjb/nBkkwEf/CfpHcbam+Mg5Pllco7HAGRQ2/EFhZrrJtbyNTgKwknfVS+llsXGygiDGwJWw==",
@@ -2772,7 +2752,6 @@
     "dependencies": [
       "jsr:@kuboon/dpop@~0.1.2",
       "jsr:@kuboon/md@0.7",
-      "jsr:@kuboon/share-element@0.5",
       "jsr:@remix-kbn/assets-deno@0.9",
       "jsr:@remix-kbn/helper-agent@0.3",
       "jsr:@remix-kbn/ssg@0.13",
@@ -2782,8 +2761,6 @@
       "npm:@remix-run/component@1",
       "npm:@remix-run/fetch-router@1",
       "npm:@remix-run/render-middleware@1",
-      "npm:@remix-run/spa@1",
-      "npm:@remix-run/ui@~0.12.1",
       "npm:canvaskit-wasm@0.40",
       "npm:puppeteer-core@^23.11.1"
     ]

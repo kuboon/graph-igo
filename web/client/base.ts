@@ -15,14 +15,12 @@
  *   because nothing in `client/` is type-checked with `deno.ns` — a file here may not name a
  *   runtime the browser does not have.
  * - **In the browser**, from the `<meta>` the shell writes, because there is no environment to
- *   read and the prefix is not guessable from the URL: `/repo/preview/blog` and `/blog` are the
+ *   read and the prefix is not guessable from the URL: `/repo/preview/play` and `/play` are the
  *   same page under two deploys.
  *
- * The browser used to have no reason to ask — a prefix is a render-time value, and by the time a
- * page is on screen the prefix is already in its HTML. Client-side routing is what changed that:
- * `client/spa/app.tsx` matches `location.pathname` against the same route patterns the server
- * matches, and a router that thought the prefix was empty would fail to match every URL under a
- * sub-path deploy. Which is every pull request preview.
+ * The browser asks because the game islands fetch the wasm modules by URL from script, and a
+ * loader that thought the prefix was empty would miss them under a sub-path deploy. Which is
+ * every pull request preview.
  *
  * ## Why the import is `/base` and not `/site`
  *

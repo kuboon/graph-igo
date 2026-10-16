@@ -182,3 +182,38 @@ fn one() -> usize {
 fn default_playouts() -> u32 {
     2000
 }
+
+/// A capture problem: can the stone at `target`, and the group it belongs to, be taken?
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SolveRequest {
+    #[serde(flatten)]
+    pub position: Position,
+    /// Whose move it is: the attacker (the colour that is not `target`'s) or the defender.
+    pub to_move: Color,
+    pub target: usize,
+    /// How many moves, both sides counted, the reading may look ahead.
+    #[serde(default = "default_depth")]
+    pub max_depth: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SolveResponse {
+    /// The colour trying to capture.
+    pub attacker: Color,
+    /// Whether the attacker can force the capture within `maxDepth`, whoever is to move.
+    pub attacker_wins: bool,
+    /// The move the reading recommends for the side to move: the winning move if it has one, its
+    /// most stubborn one if it has not. `null` passes.
+    #[serde(rename = "move")]
+    pub best: Option<usize>,
+    /// The target is already gone.
+    pub captured: bool,
+    /// Positions the reading visited.
+    pub visited: u64,
+}
+
+fn default_depth() -> u32 {
+    9
+}
