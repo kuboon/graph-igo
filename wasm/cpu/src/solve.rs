@@ -48,16 +48,25 @@ impl Reader {
             if liberties.len() as u32 > depth.div_ceil(2) {
                 return Outcome {
                     attacker_wins: false,
-                    best: liberties.first().copied(),
+                    best: self.pressing(board, &liberties),
                 };
             }
-            let mut first_legal = None;
+            // The losing attacker's move is still worth showing, so it is the one that leaves the
+            // target the fewest liberties: the try a reader would look at first.
+            let mut pressing: Option<(usize, usize)> = None;
             for mv in self.attacker_moves(&mut scratch, &liberties) {
                 let mut next = board.clone();
                 if next.play_quick(to_move, mv).is_err() {
                     continue;
                 }
-                first_legal.get_or_insert(mv);
+                let left = if next.stones[self.target] == EMPTY {
+                    0
+                } else {
+                    next.liberties(self.target)
+                };
+                if pressing.is_none_or(|(fewest, _)| left < fewest) {
+                    pressing = Some((left, mv));
+                }
                 if self.read(&next, opponent(to_move), depth - 1).attacker_wins {
                     return Outcome {
                         attacker_wins: true,
@@ -67,7 +76,7 @@ impl Reader {
             }
             Outcome {
                 attacker_wins: false,
-                best: first_legal,
+                best: pressing.map(|(_, mv)| mv),
             }
         } else {
             let mut stubborn = None;
@@ -93,6 +102,26 @@ impl Reader {
                 best: stubborn.flatten(),
             }
         }
+    }
+
+    /// Of `candidates`, the legal attacking move that leaves the target the fewest liberties.
+    fn pressing(&self, board: &Board, candidates: &[usize]) -> Option<usize> {
+        let mut best: Option<(usize, usize)> = None;
+        for &mv in candidates {
+            let mut next = board.clone();
+            if next.play_quick(self.attacker, mv).is_err() {
+                continue;
+            }
+            let left = if next.stones[self.target] == EMPTY {
+                0
+            } else {
+                next.liberties(self.target)
+            };
+            if best.is_none_or(|(fewest, _)| left < fewest) {
+                best = Some((left, mv));
+            }
+        }
+        best.map(|(_, mv)| mv)
     }
 
     fn attacker_moves(&self, board: &mut Board, liberties: &[usize]) -> Vec<usize> {

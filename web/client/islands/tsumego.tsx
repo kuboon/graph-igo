@@ -7,6 +7,11 @@
  * can no longer catch it within the problem's depth. A wrong move is never called wrong: the CPU
  * just answers it, and the player keeps going — or starts over. The only end other than solving
  * is an escape problem's group being captured. The problems are in `lib/graph_go/problems.ts`.
+ *
+ * Once a problem is over, "続きを検証" turns the board into a study board: the player moves for
+ * both sides in turn, "CPU が打つ" plays the reading's best move for the side to move, "待った"
+ * steps back, and after every move the panel says what the reading thinks of the position and
+ * marks the move it would play — which is how to see *why* an answer worked.
  */
 
 import { clientEntry, css, type Handle, on } from "@remix-run/component";
@@ -67,6 +72,17 @@ export const Tsumego = clientEntry(
     /** Bumped on every reset, so a reply still in its timeout knows to drop. */
     let generation = 0;
 
+    /** The study board after a problem is over: both sides by hand, with the reading alongside. */
+    let verifying = false;
+    let toMove: Player = BLACK;
+    /** Every move since the problem started, the problem's own moves included, for "待った". */
+    let history: {
+      stones: Color[];
+      ko: number | null;
+      lastMove: number | null;
+      toMove: Player;
+    }[] = [];
+
     function goal(p: Problem): string {
       return p.goal === "capture"
         ? "黒先。青で囲んだ白を取ってください。"
@@ -89,6 +105,8 @@ export const Tsumego = clientEntry(
       hint = null;
       message = goal(problem);
       generation++;
+      verifying = false;
+      history = [];
     }
     load(0);
 
@@ -124,6 +142,7 @@ export const Tsumego = clientEntry(
         message = REASON[result.reason ?? "occupied"];
         return false;
       }
+      history.push({ stones, ko, lastMove, toMove: color });
       stones = result.stones;
       ko = result.ko;
       lastMove = node;
@@ -134,6 +153,7 @@ export const Tsumego = clientEntry(
     const captured = () => stones[problem.target] === EMPTY;
 
     function onPlay(node: number): void {
+      if (verifying) return verifyMove(node);
       if (!modules || thinking || status !== "playing") return;
       if (!play(player(), node)) {
         void handle.update();
@@ -197,6 +217,68 @@ export const Tsumego = clientEntry(
       void handle.update();
     }
 
+    // --- the study board ---------------------------------------------------------------
+
+    function startVerifying(): void {
+      verifying = true;
+      // Whoever did not make the last move: black after white escaped, white after a capture.
+      toMove = problem.goal === "escape" && status === "solved" ? BLACK : WHITE;
+      explain();
+      void handle.update();
+    }
+
+    /** Says what the reading thinks of the position, and marks the move it would play. */
+    function explain(): void {
+      if (!modules) return;
+      if (captured()) {
+        hint = null;
+        message = `白は取られています。${
+          NAME[toMove]
+        }番。「待った」で戻れます。`;
+        return;
+      }
+      const reading = modules.cpu.solve({
+        graph: shape.graph,
+        stones,
+        ko,
+        toMove,
+        target: problem.target,
+        maxDepth: problem.depth,
+      });
+      hint = reading.move;
+      const verdict = reading.attackerWins
+        ? `黒は ${problem.depth} 手以内に取れます`
+        : `黒は ${problem.depth} 手以内には取れません`;
+      const best = reading.move === null ? "最善はパス" : "青い印が最善手";
+      message = `${NAME[toMove]}番。読みでは、${verdict} (${best})。`;
+    }
+
+    function verifyMove(node: number | null): void {
+      if (!modules) return;
+      if (!play(toMove, node)) {
+        void handle.update();
+        return;
+      }
+      toMove = opponent(toMove);
+      explain();
+      void handle.update();
+    }
+
+    function cpuMove(): void {
+      if (!modules || captured()) return;
+      explain();
+      verifyMove(hint);
+    }
+
+    function undo(): void {
+      const last = history.pop();
+      if (!last) return;
+      ({ stones, ko, lastMove, toMove } = last);
+      moves--;
+      explain();
+      void handle.update();
+    }
+
     function goTo(i: number): void {
       load(i);
       void handle.update();
@@ -217,10 +299,11 @@ export const Tsumego = clientEntry(
 
     return () => {
       const ready = modules !== null;
-      const playable = ready && !thinking && status === "playing";
+      const playable = ready &&
+        (verifying || (!thinking && status === "playing"));
       const kind = loadError
         ? "error"
-        : status === "solved"
+        : status === "solved" && !verifying
         ? "success"
         : "info";
 
@@ -282,10 +365,19 @@ export const Tsumego = clientEntry(
             </p>
 
             <dl mix={statsStyle}>
-              <div>
-                <dt>あなた</dt>
-                <dd>{NAME[player()]}</dd>
-              </div>
+              {verifying
+                ? (
+                  <div>
+                    <dt>手番</dt>
+                    <dd>{NAME[toMove]}</dd>
+                  </div>
+                )
+                : (
+                  <div>
+                    <dt>あなた</dt>
+                    <dd>{NAME[player()]}</dd>
+                  </div>
+                )}
               <div>
                 <dt>手数</dt>
                 <dd>{moves}</dd>
@@ -304,20 +396,57 @@ export const Tsumego = clientEntry(
               >
                 やり直す
               </button>
-              <button
-                type="button"
-                disabled={!playable}
-                mix={[actionStyle, on("click", showHint)]}
-              >
-                ヒント
-              </button>
+              {verifying
+                ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={captured()}
+                      mix={[actionStyle, primaryStyle, on("click", cpuMove)]}
+                    >
+                      CPU が打つ
+                    </button>
+                    <button
+                      type="button"
+                      mix={[actionStyle, on("click", () => verifyMove(null))]}
+                    >
+                      パス
+                    </button>
+                    <button
+                      type="button"
+                      disabled={history.length === 0}
+                      mix={[actionStyle, on("click", undo)]}
+                    >
+                      待った
+                    </button>
+                  </>
+                )
+                : (
+                  <button
+                    type="button"
+                    disabled={!playable}
+                    mix={[actionStyle, on("click", showHint)]}
+                  >
+                    ヒント
+                  </button>
+                )}
+              {status !== "playing" && !verifying
+                ? (
+                  <button
+                    type="button"
+                    mix={[actionStyle, on("click", startVerifying)]}
+                  >
+                    続きを検証
+                  </button>
+                )
+                : null}
               {status === "solved"
                 ? (
                   <button
                     type="button"
                     mix={[
                       actionStyle,
-                      primaryStyle,
+                      verifying ? null : primaryStyle,
                       on("click", () => goTo(index + 1)),
                     ]}
                   >
@@ -331,6 +460,15 @@ export const Tsumego = clientEntry(
               青で囲んだ白を、黒なら取る、白なら逃がす問題です。打つと CPU
               が読んで最善の応手を返します。間違えても続けられます。
             </p>
+            {verifying
+              ? (
+                <p mix={mutedStyle}>
+                  検証中: 黒白どちらの手も打てます。「CPU
+                  が打つ」で手番側の読みの最善手を打ち、
+                  「待った」で戻ります。「やり直す」で問題の最初に戻ります。
+                </p>
+              )
+              : null}
             <p mix={mutedStyle}>
               「逃げ切り」は、黒がもう {problem.depth}{" "}
               手以内には取れないと CPU が読み切った状態です。
