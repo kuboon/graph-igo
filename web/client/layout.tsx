@@ -74,6 +74,8 @@ export interface LayoutProps {
    * shell's help button goes with the rest of it.
    */
   bare?: boolean;
+  /** Extra `<head>` content for one page — the top page's GameCenter manifest. */
+  head?: RemixNode;
   /**
    * The client runtime, for a page that places an island — resolved by `router.tsx`, because a URL
    * under the deploy prefix and the bundler's naming is a thing only the server knows.
@@ -130,6 +132,8 @@ export interface PageModule<Props = Record<string, never>> {
   viewport?: string;
   /** Set by a page that is the whole screen — see {@link LayoutProps.bare}. */
   bare?: boolean;
+  /** Set by a page with `<head>` content of its own — see {@link LayoutProps.head}. */
+  head?: RemixNode;
 }
 
 /**
@@ -183,6 +187,7 @@ export function Layout(handle: Handle<LayoutProps>) {
             type="image/svg+xml"
             href={`${base}/static/favicon.svg`}
           />
+          {props.head ?? null}
           {(props.script?.preloads ?? []).map((href) => (
             <link key={href} rel="modulepreload" href={href} />
           ))}

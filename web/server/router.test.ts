@@ -76,3 +76,18 @@ Deno.test("GET /docs/unknown is a 404", async () => {
   assertEquals(res.status, 404);
   await res.body?.cancel();
 });
+
+Deno.test("GET / embeds the GameCenter manifest", async () => {
+  const res = await router.fetch(new Request("http://x/"));
+  const html = await res.text();
+  const m = html.match(
+    /<script type="application\/gamecenter\+json">([\s\S]*?)<\/script>/,
+  );
+  assert(m, "no manifest");
+  const manifest = JSON.parse(m[1]);
+  assertEquals(manifest.author, "7499d00d-fcff-4630-91a0-c034893c8d08");
+  assertEquals(manifest.id, "graph-igo");
+  // Relative, so it resolves against the page and not the origin.
+  assertEquals(manifest.icon, "static/favicon.svg");
+  assert(manifest.achievements.length > 0);
+});

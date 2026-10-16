@@ -1,0 +1,23 @@
+# Tells GameCenter (https://ga-cen.kbn.one) to read the published top page and its manifest.
+# It runs after the Pages deploy on main has finished, so what it reads is what just shipped. The
+# first registration waits for the author's approval at https://ga-cen.kbn.one/dev; after that
+# every run goes straight through.
+name: register
+
+on:
+  workflow_run:
+    workflows: [pages]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  register:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: kuboon/game-center/action@v1
+        with:
+          url: https://igo.kbn.one/

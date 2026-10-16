@@ -92,6 +92,27 @@
   router・asset bundler・解説の Markdown・og 画像 (静的ビルドのためだけにある)。
   `/my` (id.kbn.one サインイン + push 通知) などのデモはまだ残っている。
 
+## GameCenter 連携
+
+[GameCenter](https://ga-cen.kbn.one) の実績に対応している。
+
+- `web/client/game_center.ts` — マニフェスト (`MANIFEST`、実績の一覧) と SDK
+  (`@kuboon/game-center-sdk`) の呼び出し。`author` は変えない。実績を足すなら
+  `ACHIEVEMENTS` に足す。
+- マニフェストはトップページ (`pages/index.tsx` の `head`) の `<head>` に
+  `application/gamecenter+json` として埋め込む。登録 URL はトップページなので
+  `icon` は相対 (`static/favicon.svg`)。
+- 解除: 詰碁 (`islands/tsumego.tsx` の `awardSolved`) と対局で CPU に勝ったとき
+  (`islands/graph_go.tsx` の `awardWin`)。解いた問題は localStorage
+  (`graph-igo:solved`) に覚えて、全問・全盤の実績に使う。
+- ハブから起動されていない (トークンが無い) と SDK が localStorage に溜める。
+  `lib/game_center_link.tsx` の記録リンクを各画面に出す。**window.open
+  はしない**。トップページの `islands/game_center.tsx` は、ハブからの起動時に
+  URL のトークンを読むためにも置いている。
+- 登録: `.github/workflows/register.yaml` が main の Pages デプロイ後に
+  `https://igo.kbn.one/` を GameCenter に読ませる。初回だけ
+  https://ga-cen.kbn.one/dev で作者の承認が要る。
+
 ## デプロイ (GitHub Pages)
 
 `.github/workflows/pages.yml` が `mise run build` → `deno task build`

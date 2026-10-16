@@ -1,4 +1,7 @@
-import { css, type Handle } from "@remix-run/component";
+import { css, type Handle, unsafeHTML } from "@remix-run/component";
+
+import { MANIFEST } from "../game_center.ts";
+import { GameCenterLink } from "../islands/game_center.tsx";
 
 import { routes } from "../routes.ts";
 import { color, radius } from "../tokens.ts";
@@ -9,6 +12,19 @@ export const description =
 
 /** The shell places the sign-in island, so every page boots the runtime. */
 export const hydrate = true;
+
+/**
+ * The GameCenter manifest (https://ga-cen.kbn.one). This page is the game's registered URL, so it
+ * is the one that carries it. `<` is escaped so the JSON cannot close the script early.
+ */
+export const head = (
+  <script
+    type="application/gamecenter+json"
+    innerHTML={unsafeHTML(
+      JSON.stringify(MANIFEST, null, 2).replaceAll("<", "\\u003c"),
+    )}
+  />
+);
 
 export default function Home(_handle: Handle) {
   return () => (
@@ -34,6 +50,8 @@ export default function Home(_handle: Handle) {
           </span>
         </a>
       </div>
+
+      <GameCenterLink />
 
       <p>
         ルールと、エンジン・CPU の wasm モジュールのしくみは{" "}
