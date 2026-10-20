@@ -19,6 +19,9 @@ export interface BoardShape {
 
 export type BoardKind =
   | "grid"
+  | "strip"
+  | "band"
+  | "mobius"
   | "triangular"
   | "honeycomb"
   | "rings"
@@ -26,17 +29,29 @@ export type BoardKind =
 
 export const BOARD_KINDS: { kind: BoardKind; label: string; size: number }[] = [
   { kind: "grid", label: "碁盤 (正方格子)", size: 9 },
+  { kind: "strip", label: "細長い盤 (2 列)", size: 9 },
+  { kind: "band", label: "細長い盤 (3 列)", size: 8 },
+  { kind: "mobius", label: "メビウスの帯", size: 10 },
   { kind: "triangular", label: "三角格子 (隣接 6)", size: 7 },
   { kind: "honeycomb", label: "蜂の巣 (隣接 3)", size: 5 },
   { kind: "rings", label: "同心円", size: 5 },
   { kind: "random", label: "ランダム (ガブリエルグラフ)", size: 60 },
 ];
 
-/** Builds a board. `size` is per kind: a side, a ring count, or for `random` the node count. */
+/**
+ * Builds a board. `size` is per kind: a side, a ring count, a strip's length, or for `random` the
+ * node count.
+ */
 export function makeBoard(kind: BoardKind, size: number, seed = 1): BoardShape {
   switch (kind) {
     case "grid":
       return grid(clamp(size, 2, 19));
+    case "strip":
+      return rect(clamp(size, 2, 25), 2);
+    case "band":
+      return rect(clamp(size, 2, 25), 3);
+    case "mobius":
+      return mobius(clamp(size, 3, 24), 3);
     case "triangular":
       return triangular(clamp(size, 2, 15));
     case "honeycomb":
@@ -88,6 +103,43 @@ export function grid(n: number): BoardShape {
       points.push({ x, y });
       if (x + 1 < n) edges.push([v, v + 1]);
       if (y + 1 < n) edges.push([v, v + n]);
+    }
+  }
+  return shape(points, edges);
+}
+
+/** A `w` × `h` rectangle of the square lattice: on a long thin one, every stone is on the edge. */
+export function rect(w: number, h: number): BoardShape {
+  const points: Point[] = [];
+  const edges: [number, number][] = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = y * w + x;
+      points.push({ x, y });
+      if (x + 1 < w) edges.push([v, v + 1]);
+      if (y + 1 < h) edges.push([v, v + w]);
+    }
+  }
+  return shape(points, edges);
+}
+
+/**
+ * A Möbius strip `width` nodes across and `n` along, drawn as a ring. Going once around brings you
+ * back on the other side: the seam joins the inside of one end to the outside of the other, so
+ * the strip has one edge and no inside.
+ */
+export function mobius(n: number, width: number): BoardShape {
+  const points: Point[] = [];
+  const edges: [number, number][] = [];
+  const at = (i: number, j: number) => i * width + j;
+  for (let i = 0; i < n; i++) {
+    const angle = (2 * Math.PI * i) / n;
+    for (let j = 0; j < width; j++) {
+      const r = 2 + j;
+      points.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+      if (j + 1 < width) edges.push([at(i, j), at(i, j + 1)]);
+      if (i + 1 < n) edges.push([at(i, j), at(i + 1, j)]);
+      else edges.push([at(i, j), at(0, width - 1 - j)]); // The twist.
     }
   }
   return shape(points, edges);

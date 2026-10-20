@@ -37,7 +37,7 @@ export const ACHIEVEMENTS = [
     key: "tsumego_every_board",
     title: "どの盤でも",
     description:
-      "碁盤・三角格子・蜂の巣・同心円・ランダム、5 種類すべての盤で詰碁を解く",
+      "2 列・3 列の盤、メビウスの帯、三角格子、蜂の巣、同心円、ランダム、7 種類すべての盤で詰碁を解く",
     points: 30,
     hidden: false,
   },

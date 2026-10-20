@@ -67,18 +67,23 @@
   / `1` 黒 / `2` 白、`null` の着手はパス。
 - `web/client/lib/graph_go/` — `wasm.ts` (ロードと engine→CPU
   の接続)、`types.ts` (wire 型の TS 版。`wire.rs` を変えたらここも)、`graphs.ts`
-  (盤のプリセット:
-  正方格子・三角格子・蜂の巣・同心円・ランダムなガブリエルグラフ)。
+  (盤のプリセット: 正方格子・2 列/3
+  列の長方形・メビウスの帯・三角格子・蜂の巣・同心円・ランダムなガブリエルグラフ)。
 - `web/client/lib/graph_go/board_view.tsx` — 盤の SVG。両 island が使う。
-- `web/client/lib/graph_go/problems.ts` — 詰碁。`tools/gen_tsumego.ts`
-  がランダムな局面から読みで「急場で、正解の初手がちょうど 1 つ」のものを選んで
-  生成する。`wasm/graph_go_test.ts` が全問の正解の一意性を確かめる。
+- `web/client/lib/graph_go/problems.ts` — 詰碁。正方格子以外の盤だけで、手番は
+  決まっているが、プレイヤーは「勝つと思う側」を選んでから打つ。勝者 (`winner`)
+  は読みで決め、盤ごとに「手番側が勝つ」問題と「手番でも負ける」問題を 1 つずつ
+  置く。`tools/gen_tsumego.ts` がランダムな局面から、眼の感覚に反する (呼吸点 3
+  以上を取れる / 2 以下で逃げ切る) ものを選んで生成する。ルール
+  (勝敗・ヒント・CPU の手・`playOut`) は `lib/graph_go/tsumego.ts`
+  に一つにまとめ、 `wasm/graph_go_test.ts`
+  が全問を正しい側・逆側で打ち切って確かめる。
 - ページ: `/` (詰碁と対局への入口)、`/play` (`islands/graph_go.tsx`)、`/tsumego`
   (`islands/tsumego.tsx`)、`/docs` (解説)。`/play` と `/tsumego` は `bare`
   のゲーム画面で、`lib/graph_go/game_frame.tsx` がビューポート全体を使う枠
   (上のバー・盤・操作パネル、全画面ボタンは `lib/fullscreen.ts`) を描く。
 - 詰碁は不正解を判定しない。間違えた手にも CPU
-  が最善の応手を返し、そのまま続けられる。
+  が最善の応手を返し、そのまま続けられる。負けたら「反対側で挑戦」できる。
 - 解説は `web/server/docs/*.md` (front-matter の `title` / `order` /
   `summary`)。 `server/docs/mod.tsx` が `@kuboon/md` で描画する。`deno fmt`
   が日本語の段落を 折り返すので、描画前に日本語どうしの改行を詰めている

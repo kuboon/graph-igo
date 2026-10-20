@@ -9,10 +9,17 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 
 import { loadGraphGo } from "../web/client/lib/graph_go/wasm.ts";
 import { grid, makeBoard } from "../web/client/lib/graph_go/graphs.ts";
-import { BLACK, type Color, WHITE } from "../web/client/lib/graph_go/types.ts";
 import {
-  followHints,
-  workingMoves,
+  BLACK,
+  type Color,
+  opponent,
+  WHITE,
+} from "../web/client/lib/graph_go/types.ts";
+import {
+  playOut,
+  startOf,
+  winnerWithBestPlay,
+  winningMoves,
 } from "../web/client/lib/graph_go/tsumego.ts";
 
 const dir = new URL("../web/client/static/wasm/", import.meta.url);
@@ -124,44 +131,40 @@ Deno.test("errors come back as exceptions, not traps", () => {
   );
 });
 
-Deno.test("every tsumego has exactly its one answer", async () => {
+Deno.test("every tsumego is won by the side it says", async () => {
   const { PROBLEMS } = await import("../web/client/lib/graph_go/problems.ts");
   for (const p of PROBLEMS) {
     const { graph } = makeBoard(p.board.kind, p.board.size, p.board.seed);
-    const stones: Color[] = Array(graph.nodeCount).fill(0);
-    for (const v of p.black) stones[v] = BLACK;
-    for (const v of p.white) stones[v] = WHITE;
-    const other = p.toPlay === BLACK ? WHITE : BLACK;
-    const read = (s: Color[], toMove: 1 | 2) =>
-      cpu.solve({
-        graph,
-        stones: s,
-        toMove,
-        target: p.target,
-        maxDepth: p.depth,
-      }).attackerWins;
-    // The player wins by moving first; passing hands it to the other side.
-    assertEquals(
-      read(stones, p.toPlay),
-      p.goal === "capture",
-      `${p.id}: to play`,
-    );
-    assertEquals(
-      read(stones, other),
-      p.goal !== "capture",
-      `${p.id}: after a pass`,
-    );
-
-    // The hint's own check: exactly the answer passes it.
-    const working = workingMoves(engine, cpu, p, { graph, stones, ko: null });
-    assertEquals(working, [p.answer], p.id);
+    const start = startOf(p, graph);
+    assertEquals(winnerWithBestPlay(cpu, p, start, p.toMove), p.winner, p.id);
+    if (p.winner === p.toMove) {
+      // It wins only because it moves, and the answer is one of its winning moves.
+      assertEquals(
+        winnerWithBestPlay(cpu, p, start, opponent(p.toMove)),
+        opponent(p.winner),
+        `${p.id}: after a pass`,
+      );
+      const moves = winningMoves(engine, cpu, p, start, p.toMove);
+      assert(p.answer !== null && moves.includes(p.answer), p.id);
+    } else assertEquals(p.answer, null, p.id);
   }
 });
 
-Deno.test("every tsumego is solved by following the hints", async () => {
+Deno.test("every tsumego plays out the way the screen plays it", async () => {
   const { PROBLEMS } = await import("../web/client/lib/graph_go/problems.ts");
   for (const p of PROBLEMS) {
     const { graph } = makeBoard(p.board.kind, p.board.size, p.board.seed);
-    assertEquals(followHints(engine, cpu, p, graph), null, p.id);
+    // The right side following the hints beats the CPU...
+    assertEquals(
+      playOut(engine, cpu, p, graph, p.winner, "hint"),
+      p.winner,
+      p.id,
+    );
+    // ...and the wrong side loses even playing the CPU's most stubborn moves.
+    assertEquals(
+      playOut(engine, cpu, p, graph, opponent(p.winner), "cpu"),
+      p.winner,
+      `${p.id}: other side`,
+    );
   }
 });

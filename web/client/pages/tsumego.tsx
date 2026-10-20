@@ -4,7 +4,7 @@ import { Tsumego } from "../islands/tsumego.tsx";
 
 export const title = "詰碁 — グラフ囲碁";
 export const description =
-  "グラフの盤の上の詰碁。取るか逃げるかを打つと、CPU が読み切って応じる。";
+  "変な盤の上の詰碁。白が取られるか逃げ切るか、勝つ側を選んで CPU と打つ。";
 
 /** The board is an island. */
 export const hydrate = true;

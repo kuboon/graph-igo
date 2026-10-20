@@ -52,12 +52,14 @@ async function serveLightpanda(port: number) {
 const STATUS = "[aria-live]";
 
 Deno.test({
-  name: "lightpanda: /tsumego が wasm を読み込み、初手に CPU が応じる",
+  name: "lightpanda: /tsumego で勝つ側を選び、初手に CPU が応じる",
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
     const { PROBLEMS } = await import("../client/lib/graph_go/problems.ts");
-    const first = PROBLEMS[0];
+    // A problem whose winner moves first, so the player's move gets an answer.
+    const first = PROBLEMS.find((p) => p.answer !== null)!;
+    const at = PROBLEMS.indexOf(first);
     const cdpPort = findFreePort();
     const appPort = findFreePort();
 
@@ -80,10 +82,35 @@ Deno.test({
         await page.waitForFunction("globalThis.__rmxReady === true", {
           timeout: 10_000,
         });
-        // The modules have loaded once the status line shows the problem's instruction.
+        // The modules have loaded once the side buttons are enabled.
+        await page.waitForFunction(
+          () =>
+            [...document.querySelectorAll("button")].some((b) =>
+              b.textContent?.includes("黒を持つ") && !b.disabled
+            ),
+          { timeout: 10_000 },
+        );
+        await page.evaluate((i: number) => {
+          const select = document.querySelector("select")!;
+          select.value = String(i);
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }, at);
+        await page.waitForFunction(
+          (title: string) =>
+            document.querySelector("h2")?.textContent === title,
+          { timeout: 10_000 },
+          first.title,
+        );
+        await page.evaluate((label: string) => {
+          [...document.querySelectorAll("button")]
+            .find((b) => b.textContent?.includes(label))!
+            .click();
+        }, first.winner === 1 ? "黒を持つ" : "白を持つ");
         await page.waitForFunction(
           (selector: string) =>
-            document.querySelector(selector)?.textContent?.includes("先。") ??
+            document.querySelector(selector)?.textContent?.includes(
+              "持ちました",
+            ) ??
               false,
           { timeout: 10_000 },
           STATUS,
@@ -96,19 +123,19 @@ Deno.test({
           hits[hits.length - 1].dispatchEvent(
             new MouseEvent("click", { bubbles: true }),
           );
-        }, first.answer);
+        }, first.answer as number);
 
         await page.waitForFunction(
           (selector: string) => {
             const text = document.querySelector(selector)?.textContent ?? "";
-            return text.includes("続けて") || text.includes("正解");
+            return text.includes("あなたの番") || text.includes("正解");
           },
           { timeout: 10_000 },
           STATUS,
         );
         const status = await page.$eval(STATUS, (el) => el.textContent ?? "");
-        // The first problem takes more than one move, so the CPU answers rather than resigning.
-        assertEquals(status.includes("白が応じました"), true, status);
+        // No problem is over in one move, so the CPU answers.
+        assertEquals(status.includes("応じました"), true, status);
 
         await page.close();
         await context.close();
