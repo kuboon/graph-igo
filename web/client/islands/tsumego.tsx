@@ -1,17 +1,18 @@
 /**
- * Tsumego — capture-or-escape problems on graph boards, answered by the CPU's reading.
+ * Tsumego — capture fights on odd boards, where the player first has to guess who wins.
  *
- * The player moves; the engine says what the move does; the CPU module's `solve` reads the fight
- * out from there and plays the other side's best reply. A capture problem is solved when the
- * target group comes off the board; an escape problem is solved the moment the reading says black
- * can no longer catch it within the problem's depth. A wrong move is never called wrong: the CPU
- * just answers it, and the player keeps going — or starts over. The only end other than solving
- * is an escape problem's group being captured. The problems are in `lib/graph_go/problems.ts`.
+ * Each problem is a position with a group (ringed in blue) and a side to move. Black wins by
+ * taking the group, white by keeping it alive for good — "for good" meaning the CPU's reading
+ * says black can no longer catch it within the problem's depth. The player picks the side they
+ * think wins and plays it out against the CPU, which answers every move with the reading's best
+ * (`cpu.solve`). Picking the losing side is not called wrong either: the CPU simply wins, and the
+ * player can try the other side. The problems are in `lib/graph_go/problems.ts`, the rules in
+ * `lib/graph_go/tsumego.ts`.
  *
  * Once a problem is over, "続きを検証" turns the board into a study board: the player moves for
  * both sides in turn, "CPU が打つ" plays the reading's best move for the side to move, "待った"
  * steps back, and after every move the panel says what the reading thinks of the position and
- * marks the move it would play — which is how to see *why* an answer worked.
+ * marks the move it would play — which is how to see *why* the fight went the way it did.
  */
 
 import { clientEntry, css, type Handle, on } from "@remix-run/component";
@@ -22,11 +23,7 @@ import { color as token, radius } from "../tokens.ts";
 import { boardView, stoneIcon } from "../lib/graph_go/board_view.tsx";
 import { gameFrame } from "../lib/graph_go/game_frame.tsx";
 import { onFullscreenChange } from "../lib/fullscreen.ts";
-import {
-  BOARD_KINDS,
-  type BoardShape,
-  makeBoard,
-} from "../lib/graph_go/graphs.ts";
+import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
 import {
   gameCenter,
   onPendingChange,
@@ -35,7 +32,13 @@ import {
 } from "../game_center.ts";
 import { claimLinkView } from "../lib/game_center_link.tsx";
 import { type Problem, PROBLEMS } from "../lib/graph_go/problems.ts";
-import { cpuReply, hintMove } from "../lib/graph_go/tsumego.ts";
+import {
+  cpuMove as readingMove,
+  hintMove,
+  type TsumegoPosition,
+  winnerNow,
+  winnerWithBestPlay,
+} from "../lib/graph_go/tsumego.ts";
 import {
   BLACK,
   type Color,
@@ -47,10 +50,13 @@ import {
 } from "../lib/graph_go/types.ts";
 import { type GraphGo as Modules, loadGraphGo } from "../lib/graph_go/wasm.ts";
 
-/** `over`: the group of an escape problem was captured, so there is nothing left to save. */
-type Status = "playing" | "solved" | "over";
+/** `choosing`: the side is not picked yet. `won` / `lost`: from the player's side. */
+type Status = "choosing" | "playing" | "won" | "lost";
 
 const NAME: Record<Player, string> = { 1: "黒", 2: "白" };
+
+/** What each side is after. */
+const AIM: Record<Player, string> = { 1: "取る", 2: "逃げる" };
 
 const REASON: Record<IllegalReason, string> = {
   occupied: "そこには既に石があります。",
@@ -60,7 +66,7 @@ const REASON: Record<IllegalReason, string> = {
   invalidColor: "手番の色が不正です。",
 };
 
-/** How long the CPU's reply waits, so the player sees their own move land first. */
+/** How long the CPU's move waits, so the player sees their own move land first. */
 const REPLY_DELAY = 350;
 
 export const Tsumego = clientEntry(
@@ -76,11 +82,14 @@ export const Tsumego = clientEntry(
     let ko: number | null = null;
     let lastMove: number | null = null;
     let moves = 0;
-    let status: Status = "playing";
+    let status: Status = "choosing";
+    /** The player's side, once picked. */
+    let side: Player = BLACK;
+    let toMove: Player = BLACK;
     let thinking = false;
     let hint: number | null = null;
     let message = "";
-    /** Bumped on every reset, so a reply still in its timeout knows to drop. */
+    /** Bumped on every reset, so a CPU move still in its timeout knows to drop. */
     let generation = 0;
 
     /** Whether the hint was shown during this attempt, for the "no hint" achievement. */
@@ -88,8 +97,7 @@ export const Tsumego = clientEntry(
 
     /** The study board after a problem is over: both sides by hand, with the reading alongside. */
     let verifying = false;
-    let toMove: Player = BLACK;
-    /** Every move since the problem started, the problem's own moves included, for "待った". */
+    /** Every move since the problem started, for "待った" on the study board. */
     let history: {
       stones: Color[];
       ko: number | null;
@@ -97,10 +105,10 @@ export const Tsumego = clientEntry(
       toMove: Player;
     }[] = [];
 
-    function goal(p: Problem): string {
-      return p.goal === "capture"
-        ? "黒先。青で囲んだ白を取ってください。"
-        : "白先。青で囲んだ白を逃がしてください。";
+    function question(p: Problem): string {
+      return `${
+        NAME[p.toMove]
+      }番です。青で囲んだ白は、取られる? 逃げ切る? 勝てると思う側を選んでください。`;
     }
 
     function load(i: number): void {
@@ -114,10 +122,11 @@ export const Tsumego = clientEntry(
       ko = null;
       lastMove = null;
       moves = 0;
-      status = "playing";
+      status = "choosing";
+      toMove = problem.toMove;
       thinking = false;
       hint = null;
-      message = goal(problem);
+      message = question(problem);
       generation++;
       verifying = false;
       history = [];
@@ -125,7 +134,11 @@ export const Tsumego = clientEntry(
     }
     load(0);
 
-    const player = (): Player => problem.toPlay;
+    const position = (): TsumegoPosition => ({
+      graph: shape.graph,
+      stones,
+      ko,
+    });
 
     /** The group the problem is about, for the board to ring. */
     function targetGroup(): number[] {
@@ -146,91 +159,108 @@ export const Tsumego = clientEntry(
     }
 
     function play(color: Player, node: number | null): boolean {
-      const result = modules!.engine.play({
-        graph: shape.graph,
-        stones,
-        ko,
-        color,
-        node,
-      });
+      const result = modules!.engine.play({ ...position(), color, node });
       if (!result.legal) {
         message = REASON[result.reason ?? "occupied"];
         return false;
       }
-      history.push({ stones, ko, lastMove, toMove: color });
+      history.push({ stones, ko, lastMove, toMove });
       stones = result.stones;
       ko = result.ko;
       lastMove = node;
+      toMove = opponent(color);
       moves++;
       return true;
     }
 
     const captured = () => stones[problem.target] === EMPTY;
 
+    function choose(s: Player): void {
+      if (!modules) return;
+      side = s;
+      status = "playing";
+      message = `${NAME[side]}を持ちました (${AIM[side]}側)。`;
+      if (toMove === side) {
+        message += "どうぞ。";
+        void handle.update();
+      } else cpuTurn();
+    }
+
+    /** Plays the other side of a problem started over with the side switched. */
+    function tryOtherSide(): void {
+      const other = opponent(side);
+      load(index);
+      choose(other);
+    }
+
     function onPlay(node: number): void {
       if (verifying) return verifyMove(node);
-      if (!modules || thinking || status !== "playing") return;
-      if (!play(player(), node)) {
+      if (!modules || thinking || status !== "playing" || toMove !== side) {
+        return;
+      }
+      if (!play(side, node)) {
         void handle.update();
         return;
       }
       hint = null;
-      if (problem.goal === "capture" && captured()) {
-        status = "solved";
-        awardSolved();
-        message = "正解! 取れました。";
-        void handle.update();
-        return;
-      }
+      if (finished()) return;
+      cpuTurn();
+    }
+
+    /** The CPU's move, after a short pause: the reading's best, winning or holding out. */
+    function cpuTurn(): void {
       thinking = true;
       message = "CPU が読んでいます…";
       void handle.update();
-
       const mine = generation;
       setTimeout(() => {
         if (mine !== generation || !modules) return;
-        reply();
+        const cpu = opponent(side);
+        const move = readingMove(modules.cpu, problem, position(), cpu);
+        play(cpu, move);
         thinking = false;
+        if (finished()) return;
+        message = `${NAME[cpu]}は${
+          move === null ? "パスしました" : "応じました"
+        }。あなたの番です。`;
         void handle.update();
       }, REPLY_DELAY);
     }
 
-    /** The CPU's side of the fight, after the player's move: its best reply, whatever it is. */
-    function reply(): void {
-      const cpu = opponent(player());
-      const answer = cpuReply(modules!.cpu, problem, {
-        graph: shape.graph,
-        stones,
-        ko,
-      });
-      if (answer.kind === "escaped") {
-        status = "solved";
+    /** Ends the problem if someone has won, and says so. */
+    function finished(): boolean {
+      const winner = winnerNow(modules!.cpu, problem, position(), toMove);
+      if (winner === null) return false;
+      const how = winner === BLACK
+        ? "黒が取りました"
+        : `白が逃げ切りました (黒はもう ${problem.depth} 手以内には取れません)`;
+      if (winner === side) {
+        status = "won";
         awardSolved();
-        message = "正解! 逃げ切りました。";
-        return;
+        message = `正解! ${how}。`;
+      } else {
+        status = "lost";
+        message = side === problem.winner
+          ? `${how}。${
+            NAME[side]
+          }を選んだ読みは合っています。手順を変えて、もう一度。`
+          : `${how}。この問題は、どう打っても${NAME[winner]}が勝ちます。`;
       }
-      play(cpu, answer.move);
-      if (problem.goal === "capture") {
-        message = answer.move === null
-          ? "白はパスしました。続けてください。"
-          : "白が応じました。続けてください。";
-      } else if (captured()) {
-        status = "over";
-        message = "白が取られました。「やり直す」で最初から試せます。";
-      } else message = "黒が追ってきます。続けてください。";
+      void handle.update();
+      return true;
     }
 
     function showHint(): void {
-      if (!modules || thinking || status !== "playing") return;
+      if (!modules || thinking || status !== "playing" || toMove !== side) {
+        return;
+      }
       // Checked the way the screen checks a move, so the hint never disagrees with it.
       hintUsed = true;
-      hint = hintMove(modules.engine, modules.cpu, problem, {
-        graph: shape.graph,
-        stones,
-        ko,
-      });
+      hint = hintMove(modules.engine, modules.cpu, problem, position(), side);
       message = hint === null
-        ? "この局面からは、読みで確実な手が見つかりません。続けるか、やり直してください。"
+        ? `読みでは、ここから${
+          NAME[side]
+        }に勝ち筋はありません。反対側を試してみては?`
         : "青い印のところが読みの答えです。";
       void handle.update();
     }
@@ -243,7 +273,7 @@ export const Tsumego = clientEntry(
       const kinds = new Set(
         PROBLEMS.filter((p) => solved.has(p.id)).map((p) => p.board.kind),
       );
-      if (BOARD_KINDS.every((k) => kinds.has(k.kind))) {
+      if (PROBLEMS.every((p) => kinds.has(p.board.kind))) {
         void unlock("tsumego_every_board");
       }
       if (PROBLEMS.every((p) => solved.has(p.id))) void unlock("tsumego_all");
@@ -253,8 +283,6 @@ export const Tsumego = clientEntry(
 
     function startVerifying(): void {
       verifying = true;
-      // Whoever did not make the last move: black after white escaped, white after a capture.
-      toMove = problem.goal === "escape" && status === "solved" ? BLACK : WHITE;
       explain();
       void handle.update();
     }
@@ -269,19 +297,17 @@ export const Tsumego = clientEntry(
         }番。「待った」で戻れます。`;
         return;
       }
-      const reading = modules.cpu.solve({
-        graph: shape.graph,
-        stones,
-        ko,
+      const winner = winnerWithBestPlay(
+        modules.cpu,
+        problem,
+        position(),
         toMove,
-        target: problem.target,
-        maxDepth: problem.depth,
-      });
-      hint = reading.move;
-      const verdict = reading.attackerWins
+      );
+      hint = readingMove(modules.cpu, problem, position(), toMove);
+      const verdict = winner === BLACK
         ? `黒は ${problem.depth} 手以内に取れます`
         : `黒は ${problem.depth} 手以内には取れません`;
-      const best = reading.move === null ? "最善はパス" : "青い印が最善手";
+      const best = hint === null ? "最善はパス" : "青い印が最善手";
       message = `${NAME[toMove]}番。読みでは、${verdict} (${best})。`;
     }
 
@@ -291,7 +317,6 @@ export const Tsumego = clientEntry(
         void handle.update();
         return;
       }
-      toMove = opponent(toMove);
       explain();
       void handle.update();
     }
@@ -337,12 +362,15 @@ export const Tsumego = clientEntry(
     return () => {
       const ready = modules !== null;
       const playable = ready &&
-        (verifying || (!thinking && status === "playing"));
+        (verifying ||
+          (!thinking && status === "playing" && toMove === side));
+      const over = status === "won" || status === "lost";
       const kind = loadError
         ? "error"
-        : status === "solved" && !verifying
+        : status === "won" && !verifying
         ? "success"
         : "info";
+      const badge: Player = verifying || status === "choosing" ? toMove : side;
 
       return gameFrame({
         title: "詰碁",
@@ -352,7 +380,7 @@ export const Tsumego = clientEntry(
           stones,
           onPlay,
           playable,
-          ghost: verifying ? toMove : player(),
+          ghost: verifying ? toMove : side,
           lastMove,
           marked: targetGroup(),
           hint,
@@ -396,11 +424,13 @@ export const Tsumego = clientEntry(
 
             <h2 mix={titleStyle}>{problem.title}</h2>
             <p mix={youStyle}>
-              {stoneIcon(verifying ? toMove : player())}
+              {stoneIcon(badge)}
               <span>
                 {verifying
                   ? `検証中: ${NAME[toMove]}番`
-                  : `あなたは${NAME[player()]}です`}
+                  : status === "choosing"
+                  ? `${NAME[toMove]}番から`
+                  : `あなたは${NAME[side]} (${AIM[side]}側)`}
               </span>
             </p>
             <p mix={alertStyle} data-kind={kind} aria-live="polite">
@@ -410,6 +440,27 @@ export const Tsumego = clientEntry(
                 ? "wasm を読み込み中…"
                 : message}
             </p>
+
+            {status === "choosing"
+              ? (
+                <div mix={rowStyle}>
+                  <button
+                    type="button"
+                    disabled={!ready}
+                    mix={[actionStyle, on("click", () => choose(BLACK))]}
+                  >
+                    {stoneIcon(BLACK)} 黒を持つ (取る)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!ready}
+                    mix={[actionStyle, on("click", () => choose(WHITE))]}
+                  >
+                    {stoneIcon(WHITE)} 白を持つ (逃げる)
+                  </button>
+                </div>
+              )
+              : null}
 
             <dl mix={statsStyle}>
               <div>
@@ -422,77 +473,95 @@ export const Tsumego = clientEntry(
               </div>
             </dl>
 
-            <div mix={rowStyle}>
-              <button
-                type="button"
-                disabled={!ready}
-                mix={[actionStyle, on("click", () => goTo(index))]}
-              >
-                やり直す
-              </button>
-              {verifying
-                ? (
-                  <>
+            {status === "choosing" ? null : (
+              <div mix={rowStyle}>
+                <button
+                  type="button"
+                  disabled={!ready}
+                  mix={[actionStyle, on("click", () => goTo(index))]}
+                >
+                  やり直す
+                </button>
+                {verifying
+                  ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={captured()}
+                        mix={[actionStyle, primaryStyle, on("click", cpuMove)]}
+                      >
+                        CPU が打つ
+                      </button>
+                      <button
+                        type="button"
+                        mix={[actionStyle, on("click", () => verifyMove(null))]}
+                      >
+                        パス
+                      </button>
+                      <button
+                        type="button"
+                        disabled={history.length === 0}
+                        mix={[actionStyle, on("click", undo)]}
+                      >
+                        待った
+                      </button>
+                    </>
+                  )
+                  : over
+                  ? null
+                  : (
                     <button
                       type="button"
-                      disabled={captured()}
-                      mix={[actionStyle, primaryStyle, on("click", cpuMove)]}
+                      disabled={!playable}
+                      mix={[actionStyle, on("click", showHint)]}
                     >
-                      CPU が打つ
+                      ヒント
                     </button>
+                  )}
+                {status === "lost" && !verifying
+                  ? (
                     <button
                       type="button"
-                      mix={[actionStyle, on("click", () => verifyMove(null))]}
+                      mix={[
+                        actionStyle,
+                        primaryStyle,
+                        on("click", tryOtherSide),
+                      ]}
                     >
-                      パス
+                      {NAME[opponent(side)]}で挑戦
                     </button>
+                  )
+                  : null}
+                {over && !verifying
+                  ? (
                     <button
                       type="button"
-                      disabled={history.length === 0}
-                      mix={[actionStyle, on("click", undo)]}
+                      mix={[actionStyle, on("click", startVerifying)]}
                     >
-                      待った
+                      続きを検証
                     </button>
-                  </>
-                )
-                : (
-                  <button
-                    type="button"
-                    disabled={!playable}
-                    mix={[actionStyle, on("click", showHint)]}
-                  >
-                    ヒント
-                  </button>
-                )}
-              {status !== "playing" && !verifying
-                ? (
-                  <button
-                    type="button"
-                    mix={[actionStyle, on("click", startVerifying)]}
-                  >
-                    続きを検証
-                  </button>
-                )
-                : null}
-              {status === "solved"
-                ? (
-                  <button
-                    type="button"
-                    mix={[
-                      actionStyle,
-                      verifying ? null : primaryStyle,
-                      on("click", () => goTo(index + 1)),
-                    ]}
-                  >
-                    次の問題へ
-                  </button>
-                )
-                : null}
-            </div>
+                  )
+                  : null}
+                {status === "won"
+                  ? (
+                    <button
+                      type="button"
+                      mix={[
+                        actionStyle,
+                        verifying ? null : primaryStyle,
+                        on("click", () => goTo(index + 1)),
+                      ]}
+                    >
+                      次の問題へ
+                    </button>
+                  )
+                  : null}
+              </div>
+            )}
 
             <p mix={mutedStyle}>
-              青で囲んだ白を、黒なら取る、白なら逃がす問題です。打つと CPU
-              が読んで最善の応手を返します。間違えても続けられます。
+              黒は青で囲んだ白を取れば勝ち、白は逃げ切れば勝ちです。見慣れない盤では、普通の碁の感覚が当てになりません。勝てると思う側を選んで、CPU
+              と打ってください。
             </p>
             {verifying
               ? (

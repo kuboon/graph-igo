@@ -39,14 +39,15 @@ export default function Home(_handle: Handle) {
         <a href={routes.tsumego.href()} mix={cardStyle}>
           <strong>詰碁</strong>
           <span>
-            蜂の巣や同心円の盤で、白を取る・逃がす。CPU が読み切って応じます。
+            細長い盤やメビウスの帯で、白は取られるか逃げ切るか。勝てると思う側を選んで、読み切る
+            CPU と打ちます。
           </span>
         </a>
         <a href={routes.play.href()} mix={cardStyle}>
           <strong>対局</strong>
           <span>
-            正方格子・三角格子・蜂の巣・同心円・ランダムな盤で、人や CPU
-            と一局。
+            正方格子・細長い盤・メビウスの帯・三角格子・蜂の巣・同心円・ランダムな盤で、人や
+            CPU と一局。
           </span>
         </a>
       </div>
