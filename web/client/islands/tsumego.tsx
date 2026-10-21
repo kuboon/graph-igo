@@ -95,6 +95,9 @@ export const Tsumego = clientEntry(
     /** Whether the hint was shown during this attempt, for the "no hint" achievement. */
     let hintUsed = false;
 
+    /** Whether the problem's address was just copied, for the share button to say so. */
+    let shared = false;
+
     /** The study board after a problem is over: both sides by hand, with the reading alongside. */
     let verifying = false;
     /** Every move since the problem started, for "待った" on the study board. */
@@ -131,6 +134,7 @@ export const Tsumego = clientEntry(
       verifying = false;
       history = [];
       hintUsed = false;
+      shared = false;
     }
     load(0);
 
@@ -337,8 +341,35 @@ export const Tsumego = clientEntry(
     }
 
     function goTo(i: number): void {
+      const before = index;
       load(i);
+      if (index !== before) {
+        globalThis.history.pushState(null, "", urlOf(problem));
+      }
       void handle.update();
+    }
+
+    /** Opens the problem the address names, if it names one. */
+    function loadFromUrl(): void {
+      const id = new URL(globalThis.location.href).searchParams.get(PARAM);
+      const i = PROBLEMS.findIndex((p) => p.id === id);
+      load(i === -1 ? 0 : i);
+    }
+
+    /** Hands the problem's address to the share sheet, or copies it. */
+    async function share(): Promise<void> {
+      const url = urlOf(problem);
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: `詰碁 ${problem.title}`, url });
+          return;
+        }
+        await navigator.clipboard.writeText(url);
+        shared = true;
+        void handle.update();
+      } catch {
+        // Dismissed, or the clipboard is not allowed: the address bar still has it.
+      }
     }
 
     handle.queueTask(async () => {
@@ -348,6 +379,12 @@ export const Tsumego = clientEntry(
         onPendingChange(() => void handle.update()),
       );
       gameCenter();
+      loadFromUrl();
+      globalThis.addEventListener("popstate", () => {
+        loadFromUrl();
+        void handle.update();
+      }, { signal: handle.signal });
+      void handle.update();
       try {
         modules = await loadGraphGo(
           `${base}/static/wasm/engine.wasm`,
@@ -422,7 +459,15 @@ export const Tsumego = clientEntry(
               </button>
             </div>
 
-            <h2 mix={titleStyle}>{problem.title}</h2>
+            <div mix={headingStyle}>
+              <h2 mix={titleStyle}>{problem.title}</h2>
+              <button
+                type="button"
+                mix={[actionStyle, on("click", () => void share())]}
+              >
+                {shared ? "コピーしました" : "この問題を共有"}
+              </button>
+            </div>
             <p mix={youStyle}>
               {stoneIcon(badge)}
               <span>
@@ -583,6 +628,18 @@ export const Tsumego = clientEntry(
   },
 );
 
+/** The query parameter that names a problem, as in `/tsumego?p=strip-1`. */
+const PARAM = "p";
+
+/** The address of a problem, on whatever page and base path this is. */
+function urlOf(problem: Problem): string {
+  const url = new URL(globalThis.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set(PARAM, problem.id);
+  return url.href;
+}
+
 /** Each node's neighbours, for following the target's group. */
 function neighbours({ graph }: BoardShape): number[][] {
   const adjacency: number[][] = Array.from(
@@ -604,6 +661,14 @@ const rowStyle = css({
   display: "flex",
   flexWrap: "wrap",
   alignItems: "center",
+  gap: "0.5rem",
+});
+
+const headingStyle = css({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "space-between",
   gap: "0.5rem",
 });
 
