@@ -82,6 +82,9 @@
   (`islands/tsumego.tsx`)、`/docs` (解説)。`/play` と `/tsumego` は `bare`
   のゲーム画面で、`lib/graph_go/game_frame.tsx` がビューポート全体を使う枠
   (上のバー・盤・操作パネル、全画面ボタンは `lib/fullscreen.ts`) を描く。
+- 詰碁の URL は `/tsumego?p=<問題の id>` (id は `strip-1`
+  など、生成器が盤の種類と番号から付ける)。問題を移るたびに `pushState`
+  で書き換え、戻るボタンで前の問題に戻る。「この問題を共有」は共有シートか、無ければクリップボード。
 - 詰碁は不正解を判定しない。間違えた手にも CPU
   が最善の応手を返し、そのまま続けられる。負けたら「反対側で挑戦」できる。
 - 解説は `web/server/docs/*.md` (front-matter の `title` / `order` /

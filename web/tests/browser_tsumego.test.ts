@@ -52,14 +52,13 @@ async function serveLightpanda(port: number) {
 const STATUS = "[aria-live]";
 
 Deno.test({
-  name: "lightpanda: /tsumego で勝つ側を選び、初手に CPU が応じる",
+  name: "lightpanda: /tsumego?p= の問題で勝つ側を選び、初手に CPU が応じる",
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
     const { PROBLEMS } = await import("../client/lib/graph_go/problems.ts");
     // A problem whose winner moves first, so the player's move gets an answer.
     const first = PROBLEMS.find((p) => p.answer !== null)!;
-    const at = PROBLEMS.indexOf(first);
     const cdpPort = findFreePort();
     const appPort = findFreePort();
 
@@ -78,7 +77,8 @@ Deno.test({
         const context = await browser.createBrowserContext();
         const page = await context.newPage();
 
-        await page.goto(`http://127.0.0.1:${appPort}/tsumego`);
+        // The address names the problem.
+        await page.goto(`http://127.0.0.1:${appPort}/tsumego?p=${first.id}`);
         await page.waitForFunction("globalThis.__rmxReady === true", {
           timeout: 10_000,
         });
@@ -90,11 +90,6 @@ Deno.test({
             ),
           { timeout: 10_000 },
         );
-        await page.evaluate((i: number) => {
-          const select = document.querySelector("select")!;
-          select.value = String(i);
-          select.dispatchEvent(new Event("change", { bubbles: true }));
-        }, at);
         await page.waitForFunction(
           (title: string) =>
             document.querySelector("h2")?.textContent === title,
