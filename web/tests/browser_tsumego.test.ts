@@ -3,6 +3,7 @@ import puppeteer from "puppeteer-core";
 import { lightpanda } from "@lightpanda/browser";
 
 import router from "../server/router.tsx";
+import { GAME_ID } from "../client/game_center.ts";
 
 function findFreePort(): number {
   const listener = Deno.listen({ port: 0, hostname: "127.0.0.1" });
@@ -77,6 +78,13 @@ Deno.test({
         const context = await browser.createBrowserContext();
         const page = await context.newPage();
 
+        // An achievement waiting in the queue: the claim link then draws on the client but not on
+        // the server, which once made hydration leave the status line stuck on "読み込み中".
+        await page.goto(`http://127.0.0.1:${appPort}/docs`);
+        await page.evaluate((key: string) => {
+          localStorage.setItem(key, JSON.stringify([{ key: "tsumego_first" }]));
+        }, `gc:pending:${GAME_ID}`);
+
         // The address names the problem.
         await page.goto(`http://127.0.0.1:${appPort}/tsumego?p=${first.id}`);
         await page.waitForFunction("globalThis.__rmxReady === true", {
@@ -95,6 +103,27 @@ Deno.test({
             document.querySelector("h2")?.textContent === title,
           { timeout: 10_000 },
           first.title,
+        );
+        assertEquals(
+          await page.$$eval(STATUS, (els) => els.length),
+          1,
+          "one status line",
+        );
+        assertEquals(
+          await page.$eval(
+            STATUS,
+            (el) => el.textContent?.includes("読み込み中"),
+          ),
+          false,
+        );
+        assertEquals(
+          await page.$$eval(
+            "a",
+            (as) =>
+              as.some((a) => a.textContent?.includes("GameCenter に実績")),
+          ),
+          true,
+          "the claim link",
         );
         await page.evaluate((label: string) => {
           [...document.querySelectorAll("button")]

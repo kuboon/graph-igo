@@ -97,6 +97,16 @@ export function gameCenter(): GameCenter | null {
   return client;
 }
 
+/**
+ * The client only if a page has already made it, for drawing. The islands make it in a task after
+ * they hydrate, so their first render — like the server's, which has no client — shows no claim
+ * link. Drawing one straight away would not match the server's HTML, and hydration would then
+ * pour the link into the next element (the status line) and leave that element's text stuck.
+ */
+export function madeGameCenter(): GameCenter | null {
+  return client;
+}
+
 /** Records an achievement (or queues it), then tells the claim link to redraw. */
 export async function unlock(key: AchievementKey): Promise<void> {
   const gc = gameCenter();
