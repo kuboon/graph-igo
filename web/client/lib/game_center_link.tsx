@@ -2,17 +2,18 @@
  * The claim link: what the player presses to record the achievements waiting in the queue.
  *
  * A plain function the islands place in their render; each subscribes with `onPendingChange` and
- * redraws. It renders nothing until there is something to record, and it is only ever a link —
- * the player follows it when they choose to.
+ * redraws. It renders nothing until there is something to record — and nothing until the island
+ * has made the SDK client after hydrating (`madeGameCenter`) — and it is only ever a link — the
+ * player follows it when they choose to.
  */
 
 import { css, type RemixNode } from "@remix-run/component";
 
-import { gameCenter } from "../game_center.ts";
+import { madeGameCenter } from "../game_center.ts";
 import { color, radius } from "../tokens.ts";
 
 export function claimLinkView(): RemixNode {
-  const gc = gameCenter();
+  const gc = madeGameCenter();
   const href = gc?.claimUrl();
   if (!gc || !href) return null;
   return (

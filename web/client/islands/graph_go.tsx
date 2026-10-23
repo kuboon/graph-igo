@@ -266,6 +266,7 @@ export const GraphGo = clientEntry(
         onPendingChange(() => void handle.update()),
       );
       gameCenter();
+      void handle.update();
       try {
         modules = await loadGraphGo(
           `${base}/static/wasm/engine.wasm`,
