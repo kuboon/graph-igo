@@ -3,120 +3,156 @@
  *
  * These are `ClientTool`s: they run in the browser, on the page the question is about. That is the
  * half of tool use a static site can actually have — there is no server behind GitHub Pages to run
- * anything, but there is a document right here, and it knows which screen is open, whether it
- * hydrated, and how many islands it placed.
+ * anything, but there is a document right here, and it knows which screen is open and what is on
+ * it.
  *
- * They are declared to the controller on every turn and stored nowhere, so this list is what *this
- * deploy* can do rather than what the package can. A site with a settings form would add a tool
- * that reads it; this one has a shell, a path and a link to its own issue tracker.
+ * Reports go to GameCenter's feedback page (`gc.feedbackUrl()`), where the player signs in and the
+ * author reads them. Nothing is sent from here: the page has no session to send with. So the
+ * helper drafts the text — the player's words, plus the element they pointed at — and hands over
+ * the link to paste it into.
+ *
+ * Pointing is `@kuboon/chat-element`'s picker, and what it gives back is a CSS path only; the
+ * game's context for that path is added when the report is drafted (`context.ts`).
  */
 
-import type { ClientTool } from "@remix-kbn/helper-agent/client";
+import type { ClientTool } from "@kuboon/chat-element";
+import { elementPath, pickElement } from "@kuboon/chat-element/picker";
 
-/** Where a bug report goes. The template's own repository — change it when you fork. */
-const ISSUES_URL = "https://github.com/kuboon/graph-igo/issues/new";
+import { gameCenter } from "../game_center.ts";
+import { describeScreen, onPage } from "./context.ts";
 
-/**
- * What page this is, read off the document rather than off a route table.
- *
- * Deliberately the document's own view of itself: the helper is explaining the page in front of
- * the person, and after a soft navigation the URL and the heading are the only things that are
- * certainly current.
- */
+/** What the tools need from the panel they are offered in. */
+export interface PanelHooks {
+  /** Gets the panel out of the way while the player picks, and brings it back after. */
+  hide(): void;
+  show(): void;
+  /** The panel's own element, which is never picked. */
+  element(): Element | null;
+}
+
+/** The page the person is looking at, read off the document. */
 const whereAmI: ClientTool = {
   name: "where_am_i",
   description:
-    "The page the person is looking at: its path, its heading, whether it shipped JavaScript, " +
-    "and how many interactive islands it placed. Use it before explaining anything that depends " +
-    "on which screen they are on.",
+    "The page the person is looking at: its path, its heading and what the status line says. " +
+    "Use it before explaining anything that depends on which screen they are on.",
   inputSchema: { type: "object", properties: {} },
   run: () => {
-    const heading = document.querySelector("h1")?.textContent?.trim() ??
-      "(none)";
-    const scripts = document.querySelectorAll('script[type="module"]').length;
-    const islands = countIslands();
-
+    const heading = onPage("h2, h1")?.textContent?.trim() ??
+      "(なし)";
+    const status = onPage("[aria-live]")?.textContent?.trim();
     return [
-      `path: ${location.pathname}`,
-      `heading: ${heading}`,
-      `title: ${document.title}`,
-      `module scripts: ${scripts}`,
-      `hydrated islands: ${islands}`,
+      `ページ: ${location.pathname}${location.search}`,
+      `見出し: ${heading}`,
+      `タイトル: ${document.title}`,
+      ...(status ? [`状態表示: ${status}`] : []),
     ].join("\n");
   },
 };
 
 /**
- * How many islands this page placed.
+ * The player taps the part of the screen the report is about.
  *
- * The runtime brackets each hydration root with an HTML comment rather than an attribute, so this
- * walks comments. Which is the point of the tool existing at all: the answer is in the document,
- * and only something running in the document can read it.
+ * `chat-element`'s own `pickElementTool`, except that the panel steps aside while the player
+ * picks: on a phone the corner panel covers most of the board. Throws when the pick is given up,
+ * so the script can tell "did not pick" from a path.
  */
-function countIslands(): number {
-  const walker = document.createTreeWalker(
-    document.body,
-    NodeFilter.SHOW_COMMENT,
-  );
-  let count = 0;
-  while (walker.nextNode()) {
-    if (walker.currentNode.nodeValue?.trim().startsWith("rmx:h:")) count++;
-  }
-  return count;
+function pickTool(panel: PanelHooks): ClientTool {
+  return {
+    name: "pick_element",
+    description:
+      "Asks the person to tap the part of the screen they mean, and returns its CSS path. Use it " +
+      "when they want to report something they can see.",
+    inputSchema: { type: "object", properties: {} },
+    run: async (_input, signal) => {
+      panel.hide();
+      try {
+        const self = panel.element();
+        const el = await pickElement({ ignore: self ? [self] : [], signal });
+        if (el === null) throw new Error("選ぶのを取りやめました");
+        return elementPath(el);
+      } finally {
+        panel.show();
+      }
+    },
+  };
 }
 
+/** The longest report GameCenter's feedback form takes. */
+const MAX_REPORT = 4000;
+
 /**
- * Drafting the report, from the one side that exists here.
+ * Drafts the report and hands over where to send it.
  *
- * On a deployment with a server this would be an `AgentTool`: it would run where the credentials
- * are and come back with an issue number. A static site has no such place, so the browser does
- * the only thing it can and builds the compose URL with the conversation's own words already in
- * it. The person opens it and presses submit, which for an unauthenticated visitor is the right
- * shape anyway.
- *
- * It returns the URL rather than opening a tab. A tool runs after the reply has finished
- * streaming, by which point there is no user gesture left and `window.open` is blocked — the
- * panel renders `http(s)` URLs in a reply as links, so handing one back is both the working
- * option and the honest one.
+ * It copies the draft to the clipboard when the browser lets it — a tool runs after the reply has
+ * streamed, so there may be no user gesture left and the copy can be refused — and returns the
+ * text either way, with the feedback link. The link is returned rather than opened: the panel
+ * renders `http(s)` URLs as links, and the player follows it when they choose to.
  */
-const draftBugReport: ClientTool = {
-  name: "draft_bug_report",
+const draftReport: ClientTool = {
+  name: "draft_report",
   description:
-    "Drafts a report of a problem with this site and returns a link to this repository's issue " +
-    "form with it pre-filled. Use it only after the person has described what went wrong and " +
-    "said they want it reported. Summarise their words; do not invent steps they did not " +
-    "describe. Nothing is filed until they open the link and submit it.",
+    "Drafts a bug report or a request for this game from what the person said and the element " +
+    "they picked, copies it if it can, and returns it with the link to GameCenter's feedback " +
+    "page to paste it into. Use it only after they have described the problem and said to send " +
+    "it. Nothing is sent until they paste it there and press send.",
   inputSchema: {
     type: "object",
     properties: {
-      title: {
-        type: "string",
-        description: "One line, in the words the person used",
-      },
-      body: {
+      description: {
         type: "string",
         description:
-          "What they did, what happened, and what they expected instead",
+          "What they did, what happened, and what they expected, in their words",
+      },
+      element: {
+        type: "string",
+        description:
+          "The CSS path of the element they pointed at, from pick_element or the ⌖ button",
       },
     },
-    required: ["title", "body"],
+    required: ["description"],
   },
-  run: (input) => {
-    const { title, body } = input as { title?: unknown; body?: unknown };
-    if (typeof title !== "string" || typeof body !== "string") {
-      throw new Error("A report needs both a title and a body");
+  run: async (input) => {
+    const { description, element } = input as {
+      description?: unknown;
+      element?: unknown;
+    };
+    if (typeof description !== "string" || description.trim() === "") {
+      throw new Error("報告には内容が要ります");
     }
+    const report = [
+      description.trim(),
+      "",
+      "---",
+      describeScreen(
+        typeof element === "string" && element ? element : undefined,
+      ),
+      `ブラウザ: ${navigator.userAgent}`,
+    ].join("\n").slice(0, MAX_REPORT);
 
-    const url = new URL(ISSUES_URL);
-    url.searchParams.set("title", title);
-    url.searchParams.set(
-      "body",
-      `${body}\n\n---\nReported from ${location.href} via the in-page helper.`,
-    );
-
-    return `The report is drafted. Open ${url.href} to check it and submit.`;
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(report);
+      copied = true;
+    } catch {
+      // No gesture left, or no clipboard: the text below is there to copy by hand.
+    }
+    const url = gameCenter()?.feedbackUrl();
+    const where = url
+      ? `${url} を開いて、「内容」に貼り付けて送ってください (送るには id.kbn.one のサインインが要ります)。`
+      : "GameCenter に繋がらないので、送り先を出せませんでした。";
+    return [
+      copied
+        ? "報告文を作って、コピーしました。"
+        : "報告文を作りました。下の文をコピーしてください。",
+      where,
+      "",
+      report,
+    ].join("\n");
   },
 };
 
 /** Everything this page offers the helper. */
-export const pageTools: readonly ClientTool[] = [whereAmI, draftBugReport];
+export function pageTools(panel: PanelHooks): readonly ClientTool[] {
+  return [whereAmI, pickTool(panel), draftReport];
+}

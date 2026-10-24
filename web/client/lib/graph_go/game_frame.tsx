@@ -4,12 +4,14 @@
  *
  * Game pages are `bare` — no site header or footer — and set `viewport-fit=cover`, so the frame
  * pads itself by the safe-area insets. The bar's "全画面" button takes the frame fullscreen where
- * the Fullscreen API exists (`lib/fullscreen.ts`). A function rather than a component, like
+ * the Fullscreen API exists (`lib/fullscreen.ts`); "ヘルプ" opens the in-page helper
+ * (`client/helper/`), where a player can also pick the part of the screen they want to report. A function rather than a component, like
  * `boardView`: the islands own the state and re-render it whole.
  */
 
 import { css, on, ref, type RemixNode } from "@remix-run/component";
 
+import { HELPER_BUTTON_ID } from "../../helper/button.ts";
 import { routes } from "../../routes.ts";
 import { color, radius } from "../../tokens.ts";
 import {
@@ -37,6 +39,12 @@ export function gameFrame(props: GameFrameProps): RemixNode {
         <a href={routes.home.href()} mix={barLinkStyle}>← グラフ囲碁</a>
         <strong mix={titleStyle}>{props.title}</strong>
         <a href={routes.docs.index.href()} mix={barLinkStyle}>解説</a>
+        {
+          /* The helper's button: `client/helper/install.ts` listens for it on the document. */
+        }
+        <button type="button" id={HELPER_BUTTON_ID} mix={barButtonStyle}>
+          ヘルプ
+        </button>
         {offerFullscreen
           ? (
             <button

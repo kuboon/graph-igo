@@ -35,10 +35,10 @@
  * before `</head>`, so the link has to come first.
  */
 
-import { attrs, css, type Handle, type RemixNode } from "@remix-run/component";
+import { css, type Handle, type RemixNode } from "@remix-run/component";
 
 import { base, BASE_META_NAME } from "./base.ts";
-import { HELPER_BUTTON_ID, HELPER_SRC_ATTRIBUTE } from "./helper/button.ts";
+import { HELPER_BUTTON_ID, HELPER_META_NAME } from "./helper/button.ts";
 import { NavAuth } from "./islands/nav_auth.tsx"; // [feature:signin]
 import { routes } from "./routes.ts";
 import { color, contentWidth } from "./tokens.ts";
@@ -187,6 +187,12 @@ export function Layout(handle: Handle<LayoutProps>) {
             type="image/svg+xml"
             href={`${base}/static/favicon.svg`}
           />
+          {
+            /* Where the chat's chunk is, for whichever help button the page has — see `client/helper/`. */
+          }
+          {props.script
+            ? <meta name={HELPER_META_NAME} content={props.script.helper} />
+            : null}
           {props.head ?? null}
           {(props.script?.preloads ?? []).map((href) => (
             <link key={href} rel="modulepreload" href={href} />
@@ -261,12 +267,9 @@ export function Shell(handle: Handle<ShellProps>) {
                 <button
                   type="button"
                   id={HELPER_BUTTON_ID}
-                  mix={[
-                    helperButtonStyle,
-                    attrs({ [HELPER_SRC_ATTRIBUTE]: handle.props.helper }),
-                  ]}
+                  mix={helperButtonStyle}
                 >
-                  Help
+                  ヘルプ
                 </button>
               )
               : null}

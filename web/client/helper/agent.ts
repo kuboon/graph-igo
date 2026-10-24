@@ -6,153 +6,247 @@
  * written by a model. GitHub Pages has no server and so nowhere to keep an API key, so what runs
  * here is `agent/dummy` — the same `Agent` interface, answering from a script.
  *
- * Everything else is the real thing. The client, the wire protocol, the streaming, the tool round
- * trip and the transcript are the package's own, and the only difference is that the sentences
- * below were written rather than generated. Which makes this the honest demonstration of the
- * arrangement: what a static host can show is everything except the model.
- *
- * The replies are matched against the most recent user message, first hit wins, so they are
- * ordered specific-first. `fallback` is where a real agent's judgement would be, and it does the
- * one thing a script can honestly do instead: say what it is and list what it can answer.
+ * Two kinds of turn. Questions are matched against the most recent user message, first hit wins,
+ * so `replies` is ordered specific-first. A report is a short conversation of its own, read off
+ * the transcript rather than kept anywhere: "報告" asks the page to let the player pick an element
+ * (`pick_element`), whatever they write after that is what went wrong, and "送る" drafts the
+ * report from those words and the element (`draft_report`). See `tools.ts`.
  */
 
-import { dummyAgent, scriptedTurns } from "@remix-kbn/helper-agent/agent/dummy";
+import { dummyAgent } from "@remix-kbn/helper-agent/agent/dummy";
+
+import { pathIn } from "./context.ts";
 import type {
   Agent,
   AgentInput,
   DummyTurn,
 } from "@remix-kbn/helper-agent/agent/dummy";
 
-/** Every canned answer, in the order they are tried. */
-const replies = [
+type Messages = AgentInput["messages"];
+
+/** Canned answers, in the order they are tried. */
+const replies: { match: RegExp; turn: DummyTurn }[] = [
   {
-    match: /where am i|which page|what page|this page/i,
+    match: /どこ|このページ|この画面|where am i|which page/i,
     turn: { toolCalls: [{ name: "where_am_i" }] },
   },
   {
-    match: /bug|broken|doesn'?t work|not working|report/i,
+    match: /詰碁|つめご|tsumego/i,
     turn: {
       text:
-        "Sorry — that should not happen. Tell me what you did and what you saw, and I will " +
-        "draft an issue on this site's tracker for you to check and submit. (Try saying " +
-        "“file it” once you have described it.)",
+        "詰碁は、青で囲んだ白の連が取られるか、逃げ切るかの問題です。まず勝てると思う側" +
+        "(黒 = 取る / 白 = 逃げる) を選んで、CPU と最後まで打ちます。手番の側が勝つとは限りません。" +
+        "負けたら「反対側で挑戦」、決着後は「続きを検証」で読み筋を確かめられます。",
     },
   },
   {
-    match: /file it|go ahead|draft (it|the report)|yes please/i,
+    match: /共有|url|リンク|share/i,
     turn: {
       text:
-        "Drafting it now — nothing is filed until you open the link and submit.",
-      toolCalls: [{
-        name: "draft_bug_report",
-        input: {
-          title: "Something is wrong on the demo site",
-          body:
-            "Reported from the in-page helper. Please describe what happened.",
-        },
-      }],
+        "詰碁は問題ごとにアドレスが変わります (例: /tsumego?p=strip-1)。問題名の横の" +
+        "「この問題を共有」か、アドレスバーの URL をそのまま送ってください。",
     },
   },
   {
-    match: /island|hydrat/i,
+    match: /対局|ルール|打ち方|コウ|自殺|取り|地|終局|パス/i,
     turn: {
       text:
-        "An island is a component that is server-rendered like everything else and then wakes up " +
-        "in the browser. A page opts in with `export const hydrate = true`, places the island, " +
-        'and the shell writes one `<script type="module">` for the whole page. Every island is ' +
-        "compiled as one graph, so two of them that import the same module get the same instance " +
-        "— the game and tsumego boards share the wasm loader that way. A " +
-        "page that places none, like the docs listing, ships no JavaScript at all.",
+        "点が交点、線が隣どうしです。石のつながり・呼吸点・取り・コウ・自殺手禁止は普通の囲碁と同じで、" +
+        "両者がパスすると終局し、CPU が空いた領域を黒白どちらの地か判定して数えます。" +
+        "盤の種類と大きさ、どちらを CPU にするかは「新しい対局」で選べます。詳しくは「解説」へ。",
     },
   },
   {
-    match: /docs?|解説|article|markdown/i,
+    match: /実績|gamecenter|ゲームセンター|記録/i,
     turn: {
       text:
-        "The docs (解説) are Markdown files under `server/docs/`. The listing is generated from " +
-        "whatever is on disk, ordered by each file's `order` front-matter, so adding an " +
-        "explanation is adding a file. Neither the listing nor an article ships JavaScript.",
+        "詰碁を解いたり CPU に勝ったりすると GameCenter の実績が解除されます。GameCenter から" +
+        "起動していないときは端末に溜まり、画面に出る「GameCenter に実績を記録する」リンクで記録できます。",
     },
   },
   {
-    match: /og|social|card|preview image/i,
+    match: /全画面|fullscreen/i,
     turn: {
       text:
-        "Each page's social card is a PNG drawn at build time with Skia, from the same title and " +
-        "description that go into `<head>`. Nothing on the site links to one, so the build is " +
-        "told about them explicitly rather than finding them by crawling.",
+        "ゲーム画面の「全画面」で盤を画面いっぱいにできます (Fullscreen API の無い iPhone Safari では、" +
+        "もともと画面全体を使っています)。ヘルプを開くと全画面は解除されます。",
     },
   },
   {
-    match: /ssg|static|build|prerender|crawl/i,
+    match: /あなた|ヘルパー|ai|bot|仕組み|how do you work/i,
     turn: {
       text:
-        "The build runs the site's own router and crawls it from `/`, following links, and writes " +
-        "what comes back as files. So there is no second description of the site anywhere: what " +
-        "`deno task dev` serves is what gets written. `deno task build` puts it in `web/dist`.",
-    },
-  },
-  {
-    match: /deploy|gh.?pages|github pages|prefix|base/i,
-    turn: {
-      text:
-        "It deploys to GitHub Pages, including a preview per pull request under its own sub-path. " +
-        "That sub-path is why the deploy prefix is a value the site reads rather than a string " +
-        "anyone types: routes are built on it, and the browser is told it through a `<meta>` tag " +
-        "because `/repo/play` and `/play` are the same page under two deploys.",
-    },
-  },
-  {
-    match:
-      /chat|helper|assistant|are you (a )?(real|ai|model|bot)|dummy|how do you work/i,
-    turn: {
-      text:
-        "Honest answer: there is no model behind me. I am `@remix-kbn/helper-agent` with its " +
-        "scripted agent, and the whole chat — panel, controller and all — is running " +
-        "inside this page. The controller is mounted on a `fetch-router` in your browser and the " +
-        "client posts to it with that router's own `fetch`, so nothing leaves the origin. On a " +
-        "site with a server the same controller takes `agent/claude` instead, and only that one " +
-        "line changes.",
-    },
-  },
-  {
-    match: /fullscreen|全画面|game|viewport|safe area|notch/i,
-    turn: {
-      text:
-        "The game screens (対局 and 詰碁) are the whole viewport: no site chrome, the board as " +
-        "large as the screen allows, and a 全画面 button that takes them fullscreen where the " +
-        "Fullscreen API exists. iPhone Safari has no such API, so there the page simply fills " +
-        "the viewport.",
+        "私は `@remix-kbn/helper-agent` の台本エージェントで、モデルは入っていません。チャットの" +
+        "やりとりも、画面の要素を選ぶのも、報告文を作るのも、すべてこのページの中で動いています。",
     },
   },
 ];
 
-/** What to say when nothing matched, and after a tool has run. */
-function fallback(input: AgentInput): DummyTurn {
-  const last = input.messages.at(-1);
+/** Starts a report: says what to do, and asks the page to let the player pick. */
+const REPORT_WORDS = /報告|不具合|おかしい|バグ|壊れ|動かない|要望|bug|report/i;
+/** Ends a report's description. */
+const SEND_WORDS = /^(送る|送って|送信|報告して|これで|ok|はい|お願い)/i;
+/** Gives up on a report. */
+const CANCEL_WORDS = /やめ|中止|キャンセル|cancel/i;
 
+/** The name of every tool call in the transcript, by id. */
+function callNames(messages: Messages): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const call of message.toolCalls ?? []) names.set(call.id, call.name);
+  }
+  return names;
+}
+
+/**
+ * Where a report stands: the element picked (or `null` if picking was given up), and everything
+ * the player has written since. `undefined` when no report is open — none started, or the last
+ * one has been drafted or abandoned.
+ */
+function openReport(
+  messages: Messages,
+): { element: string | null; words: string[] } | undefined {
+  const names = callNames(messages);
+  let report: { element: string | null; words: string[] } | undefined;
+  for (const message of messages) {
+    if (message.role === "tool") {
+      for (const result of message.results) {
+        const name = names.get(result.id);
+        if (name === "pick_element") {
+          report = {
+            element: result.isError ? null : result.content,
+            words: [],
+          };
+        } else if (name === "draft_report") report = undefined;
+      }
+    } else if (message.role === "user") {
+      // A path from the ⌖ button opens a report too, or names the element of an open one.
+      const path = pathIn(message.content);
+      // The ⌖ button writes it in backticks.
+      const rest = (path
+        ? message.content.replace(`\`${path}\``, "").replace(path, "")
+        : message.content).trim();
+      if (report) {
+        if (CANCEL_WORDS.test(rest)) {
+          report = undefined;
+        } else {
+          if (path) {
+            report.element = path;
+          }
+          if (rest && !SEND_WORDS.test(rest)) {
+            report.words.push(rest);
+          }
+        }
+      } else if (path) {
+        report = { element: path, words: rest ? [rest] : [] };
+      }
+    }
+  }
+  return report;
+}
+
+function latestUserText(messages: Messages): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role === "user") return message.content;
+  }
+  return "";
+}
+
+function script(input: AgentInput): DummyTurn {
+  const { messages } = input;
+  const last = messages.at(-1);
+
+  // After a tool the page ran.
   if (last?.role === "tool") {
-    const failed = last.results.filter((result) => result.isError);
-    if (failed.length > 0) {
+    const names = callNames(messages);
+    const result = last.results[0];
+    const name = result ? names.get(result.id) : undefined;
+    if (name === "pick_element") {
       return {
-        text: `That did not work: ${failed.map((r) => r.content).join("; ")}`,
+        text: result.isError
+          ? "選ぶのを取りやめました。場所を選ばずに報告するなら、何が起きたかを書いて、" +
+            "最後に「送る」と送ってください。やめるなら「やめる」。"
+          : `選んだのはここです:\n\n${result.content}\n\n` +
+            "何をしたら、どうなったか (どうなってほしかったか) を書いてください。" +
+            "書き終えたら「送る」と送ってください。やめるなら「やめる」。",
       };
     }
-
+    if (name === "draft_report") {
+      return {
+        text: result.isError
+          ? `作れませんでした: ${result.content}`
+          : result.content,
+      };
+    }
     return {
-      text: `Here is what the page told me:\n\n${
+      text: `画面から読み取ったことです:\n\n${
         last.results.map((r) => r.content).join("\n")
-      }\n\n` +
-        "Anything else you want to know about it?",
+      }`,
     };
+  }
+
+  const text = latestUserText(messages).trim();
+  const report = openReport(messages);
+
+  // The report this message closed, if it was "やめる": `openReport` has already dropped it.
+  if (!report && CANCEL_WORDS.test(text) && openReport(messages.slice(0, -1))) {
+    return {
+      text: "報告はやめました。また何かあれば「報告」と送ってください。",
+    };
+  }
+
+  if (report) {
+    const path = pathIn(text);
+    if (path) {
+      return {
+        text: `指した場所 (${path}) を報告に添えます。` +
+          (report.words.length === 0
+            ? "何をしたら、どうなったかを書いて、最後に「送る」と送ってください。"
+            : "書き足すことがあれば続けて、終わったら「送る」と送ってください。"),
+      };
+    }
+    if (SEND_WORDS.test(text)) {
+      if (report.words.length === 0) {
+        return {
+          text: "先に、何が起きたかを書いてください。それから「送る」です。",
+        };
+      }
+      return {
+        text: "報告文を作ります。",
+        toolCalls: [{
+          name: "draft_report",
+          input: {
+            description: report.words.join("\n"),
+            ...(report.element ? { element: report.element } : {}),
+          },
+        }],
+      };
+    }
+    return {
+      text:
+        "書き足すことがあれば続けてください。終わったら「送る」と送ってください。",
+    };
+  }
+
+  if (REPORT_WORDS.test(text)) {
+    return {
+      text:
+        "報告したいところを、画面でタップして選んでください (Esc か「やめる」で選ばずに進めます)。",
+      toolCalls: [{ name: "pick_element" }],
+    };
+  }
+
+  for (const reply of replies) {
+    if (reply.match.test(text)) return reply.turn;
   }
 
   return {
     text:
-      "I only know a handful of things about this site, because I am a script rather than a " +
-      "model — ask me about the static build, islands and hydration, the " +
-      "docs, the social cards, deploying to GitHub Pages, or this chat itself. You can also ask " +
-      "“what page am I on?”, or tell me about a bug and I will open a report.",
+      "台本で答えているので、わかることは限られています。詰碁・対局のルール・問題の共有・" +
+      "実績・全画面のことを聞いてみてください。「この画面は?」で今の画面を読み取り、" +
+      "「報告」で画面の場所を選んで作者への報告文を作れます。",
   };
 }
 
@@ -160,8 +254,8 @@ function fallback(input: AgentInput): DummyTurn {
  * The agent this site's controller serves.
  *
  * `wordDelay` is left at its default: the words arriving one at a time is not decoration here, it
- * is the streaming path being exercised. Shorten it and the panel stops proving anything.
+ * is the streaming path being exercised.
  */
 export function siteAgent(): Agent {
-  return dummyAgent({ script: scriptedTurns(replies, fallback) });
+  return dummyAgent({ script });
 }

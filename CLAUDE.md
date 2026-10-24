@@ -100,6 +100,22 @@
   router・asset bundler・解説の Markdown・og 画像 (静的ビルドのためだけにある)。
   `/my` (id.kbn.one サインイン + push 通知) などのデモはまだ残っている。
 
+## ヘルプ (`@kuboon/chat-element` + `@remix-kbn/helper-agent`)
+
+- `web/client/helper/` — ヘッダー (`layout.tsx`) とゲーム画面の上のバー
+  (`game_frame.tsx`) の「ヘルプ」が開くチャット。パネルは `@kuboon/chat-element`
+  の `openChat` (`<chat-panel>`、⌖ ボタンで画面の要素を指せる)。答えるのは
+  `@remix-kbn/helper-agent` の controller と `agent/dummy` の台本 (`agent.ts`)
+  で、サーバーが無いのでページ内の router に載せている。チャンクの URL は
+  `<meta name="helper-src">` で渡す。
+- 報告: 「報告」と送ると `pick_element` (chat-element の `pickElement`。選ぶ間は
+  パネルを隠す。タップは盤に届かない) で要素を選ぶか、⌖ で指したパスを送る。
+  picker が返すのは CSS パスだけで、「送る」で `draft_report`
+  が報告文を作るときに `context.ts`
+  がページ・盤の点・見出し・状態表示を足す。報告文はコピーして GameCenter
+  のフィードバックの URL を返す (フォームは事前入力できないので
+  貼り付けてもらう)。会話の流れは `web/server/helper_agent.test.ts`。
+
 ## GameCenter 連携
 
 [GameCenter](https://ga-cen.kbn.one) の実績に対応している。
@@ -117,6 +133,12 @@
   `lib/game_center_link.tsx` の記録リンクを各画面に出す。**window.open
   はしない**。トップページの `islands/game_center.tsx` は、ハブからの起動時に
   URL のトークンを読むためにも置いている。
+- 不具合・要望: SDK 0.5 の `feedbackUrl()` (GameCenter のフィードバックページ。
+  プレイヤーがサインインして作者に送る)。`lib/game_center_link.tsx` の
+  `feedbackLinkView()` を各画面に出す (新しいタブで開く)。
+- 記録リンク・フィードバックリンクは `madeGameCenter()` (island が hydration
+  後に作った SDK クライアント) で描く。最初の描画でリンクを出すとサーバーの HTML
+  と食い違い、hydration が状態表示を壊す。
 - 登録: `.github/workflows/register.yaml` が main の Pages デプロイ後に curl で
   `https://igo.kbn.one/` を GameCenter に読ませる。初回だけ
   https://ga-cen.kbn.one/dev で作者の承認が要る。

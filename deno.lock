@@ -2,8 +2,9 @@
   "version": "5",
   "specifiers": {
     "jsr:@deno/loader@0.5": "0.5.0",
+    "jsr:@kuboon/chat-element@0.1": "0.1.0",
     "jsr:@kuboon/dpop@~0.1.2": "0.1.2",
-    "jsr:@kuboon/game-center-sdk@0.4": "0.4.0",
+    "jsr:@kuboon/game-center-sdk@0.5": "0.5.0",
     "jsr:@kuboon/md@0.7": "0.7.0",
     "jsr:@remix-kbn/assets-deno@0.9": "0.9.0",
     "jsr:@remix-kbn/helper-agent@0.3": "0.3.0",
@@ -60,14 +61,17 @@
     "@deno/loader@0.5.0": {
       "integrity": "a6d94408de5e6bacac404f8f6963c8b8cc278cfd1a878aa2f06b34a083d6bfee"
     },
+    "@kuboon/chat-element@0.1.0": {
+      "integrity": "fd8b9dd0f8403168718031ac2dd070e56ea1f4ef3c5e488f8c5dc6264cf5cf27"
+    },
     "@kuboon/dpop@0.1.2": {
       "integrity": "30de96c140e7b23e2ebee0145c75adc9dfe04ecbe288546348bd4b619b733add",
       "dependencies": [
         "jsr:@std/encoding@1.0.10"
       ]
     },
-    "@kuboon/game-center-sdk@0.4.0": {
-      "integrity": "9da9a77ab8e25a07aeb0ec70c2ebf9a638db60b4fae0c26407386edbd6bc1390"
+    "@kuboon/game-center-sdk@0.5.0": {
+      "integrity": "c8720a5046308f28f5e319dde2ecac3fa406b6b5573355f929e5ccfec36f2455"
     },
     "@kuboon/md@0.7.0": {
       "integrity": "54f4e4d88442831fc83e33b4576e7e5f91e45d7bbfcf26038c8d4d457e290343",
@@ -2754,8 +2758,9 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@kuboon/chat-element@0.1",
       "jsr:@kuboon/dpop@~0.1.2",
-      "jsr:@kuboon/game-center-sdk@0.4",
+      "jsr:@kuboon/game-center-sdk@0.5",
       "jsr:@kuboon/md@0.7",
       "jsr:@remix-kbn/assets-deno@0.9",
       "jsr:@remix-kbn/helper-agent@0.3",

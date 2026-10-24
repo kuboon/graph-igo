@@ -22,17 +22,15 @@
  * was there when this ran. One delegated listener outlives all of them.
  */
 
-import { HELPER_BUTTON_ID, HELPER_SRC_ATTRIBUTE } from "./button.ts";
+import { HELPER_BUTTON_ID, HELPER_META_NAME } from "./button.ts";
 
 /**
- * Where the chat's chunk is, read off the button the server rendered.
- *
- * At module load, which on the SPA demo is the only moment it can be: `run()` is about to replace
- * the body with a tree this value is needed to render. `null` on a page that ships no button.
+ * Where the chat's chunk is, read off the `<meta>` the server rendered. `null` on a page that
+ * ships no JavaScript.
  */
 export const HELPER_SRC: string | null = document
-  .getElementById(HELPER_BUTTON_ID)
-  ?.getAttribute(HELPER_SRC_ATTRIBUTE) ?? null;
+  .querySelector(`meta[name="${HELPER_META_NAME}"]`)
+  ?.getAttribute("content") ?? null;
 
 /** So two entrypoints in one document — which never happens, but would — install one listener. */
 let installed = false;
