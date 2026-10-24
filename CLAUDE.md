@@ -133,6 +133,10 @@
   `lib/game_center_link.tsx` の記録リンクを各画面に出す。**window.open
   はしない**。トップページの `islands/game_center.tsx` は、ハブからの起動時に
   URL のトークンを読むためにも置いている。
+- 記録待ちは、GameCenter の記録ページの「ゲームに戻る」(トップページへ
+  `#gcclaimed=…` で戻る) か、ハブからの起動 (トークンで送る) で消える。だから
+  記録リンクは同じタブで開く。他のタブや bfcache から戻ったページは、`storage` /
+  `pageshow` で SDK クライアントを作り直して追いつく (`game_center.ts`)。
 - 不具合・要望: SDK 0.5 の `feedbackUrl()` (GameCenter のフィードバックページ。
   プレイヤーがサインインして作者に送る)。`lib/game_center_link.tsx` の
   `feedbackLinkView()` を各画面に出す (新しいタブで開く)。
