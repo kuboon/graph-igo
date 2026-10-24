@@ -52,7 +52,23 @@ export function toggleHelperPanel(): void {
 
 let panel: ChatDialog | undefined;
 
+/**
+ * A feedback link carries the whole draft in its address, and the panel writes a link's address
+ * as its text — a wall of percent-encoding. Draw it as a short label instead; the address is
+ * still what the link opens.
+ */
+const FEEDBACK_LINK_STYLE = `
+chat-panel a[href*="/feedback/@"] { font-size: 0; }
+chat-panel a[href*="/feedback/@"]::after {
+  content: "GameCenter のフォームを開く (記入済み)";
+  font-size: 0.95rem;
+}`;
+
 function build(): ChatDialog {
+  const style = document.createElement("style");
+  style.textContent = FEEDBACK_LINK_STYLE;
+  document.head.append(style);
+
   const router = createRouter();
   router.post(CHAT_PATH, helperAgentController(siteAgent()));
 
