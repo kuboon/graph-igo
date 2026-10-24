@@ -25,6 +25,23 @@ export function claimLinkView(): RemixNode {
   );
 }
 
+/**
+ * Where a player sends a bug report or a request: GameCenter's feedback page for this game, which
+ * the player signs in to and the author reads (SDK 0.5's `feedbackUrl()`). Always there once the
+ * island has made the client. In a new tab, so the game in progress is not lost on the way.
+ */
+export function feedbackLinkView(): RemixNode {
+  const href = madeGameCenter()?.feedbackUrl();
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener" mix={feedbackStyle}>
+      不具合・要望を送る
+    </a>
+  );
+}
+
+const feedbackStyle = css({ fontSize: "0.85rem", color: color.muted });
+
 const claimStyle = css({
   margin: 0,
   padding: "0.5rem 0.75rem",

@@ -19,7 +19,7 @@ import { boardView } from "../lib/graph_go/board_view.tsx";
 import { gameFrame } from "../lib/graph_go/game_frame.tsx";
 import { onFullscreenChange } from "../lib/fullscreen.ts";
 import { gameCenter, onPendingChange, unlock } from "../game_center.ts";
-import { claimLinkView } from "../lib/game_center_link.tsx";
+import { claimLinkView, feedbackLinkView } from "../lib/game_center_link.tsx";
 import {
   BOARD_KINDS,
   type BoardKind,
@@ -424,6 +424,7 @@ export const GraphGo = clientEntry(
             <p mix={mutedStyle}>
               点をクリックすると着手、両者パスで終局して CPU が地を数えます。
             </p>
+            <p mix={mutedStyle}>{feedbackLinkView()}</p>
 
             <fieldset mix={fieldsetStyle}>
               <legend>新しい対局</legend>

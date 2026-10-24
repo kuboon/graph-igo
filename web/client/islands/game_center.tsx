@@ -9,7 +9,7 @@
 import { clientEntry, type Handle } from "@remix-run/component";
 
 import { gameCenter, onPendingChange } from "../game_center.ts";
-import { claimLinkView } from "../lib/game_center_link.tsx";
+import { claimLinkView, feedbackLinkView } from "../lib/game_center_link.tsx";
 
 export const GameCenterLink = clientEntry(
   import.meta.url,
@@ -23,6 +23,11 @@ export const GameCenterLink = clientEntry(
       await gc?.ready;
       void handle.update();
     });
-    return () => claimLinkView();
+    return () => (
+      <>
+        {claimLinkView()}
+        <p>{feedbackLinkView()}</p>
+      </>
+    );
   },
 );

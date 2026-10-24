@@ -30,7 +30,7 @@ import {
   rememberSolved,
   unlock,
 } from "../game_center.ts";
-import { claimLinkView } from "../lib/game_center_link.tsx";
+import { claimLinkView, feedbackLinkView } from "../lib/game_center_link.tsx";
 import { type Problem, PROBLEMS } from "../lib/graph_go/problems.ts";
 import {
   cpuMove as readingMove,
@@ -621,6 +621,7 @@ export const Tsumego = clientEntry(
               「逃げ切り」は、黒がもう {problem.depth}{" "}
               手以内には取れないと CPU が読み切った状態です。
             </p>
+            <p mix={mutedStyle}>{feedbackLinkView()}</p>
           </div>
         ),
       });

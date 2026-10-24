@@ -79,7 +79,7 @@
   },
   "imports": {
     "@kuboon/dpop": "jsr:@kuboon/dpop@^0.1.2",
-    "@kuboon/game-center-sdk": "jsr:@kuboon/game-center-sdk@^0.4.0",
+    "@kuboon/game-center-sdk": "jsr:@kuboon/game-center-sdk@^0.5.0",
     "@kuboon/md": "jsr:@kuboon/md@^0.7.0",
     "@lightpanda/browser": "npm:@lightpanda/browser@^1.2.0",
     "@remix-kbn/assets-deno": "jsr:@remix-kbn/assets-deno@^0.9.0",

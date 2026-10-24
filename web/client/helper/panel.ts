@@ -25,7 +25,7 @@ import type { HelperAgentPanel } from "@remix-kbn/helper-agent/client";
 
 import { base } from "../base.ts";
 import { siteAgent } from "./agent.ts";
-import { pageTools } from "./tools.ts";
+import { pageTools, type PanelHooks } from "./tools.ts";
 
 /** The one route the in-page router answers. */
 const CHAT_PATH = `${base}/helper-agent`;
@@ -37,6 +37,8 @@ const CHAT_PATH = `${base}/helper-agent`;
  * leaves the transcript alone, so the button is a toggle rather than a way to start over.
  */
 export function toggleHelperPanel(): void {
+  // A game screen in fullscreen draws nothing outside it, and the panel lives in the body.
+  if (document.fullscreenElement) void document.exitFullscreen();
   // `openHelperAgent` shows what it builds, so the first call needs nothing else.
   if (panel === undefined) {
     panel = build();
@@ -53,12 +55,19 @@ function build(): HelperAgentPanel {
   const router = createRouter();
   router.post(CHAT_PATH, helperAgentController(siteAgent()));
 
+  const hooks: PanelHooks = {
+    hide: () => panel?.close(),
+    show: () => panel?.show(),
+    element: () => panel?.dialog ?? null,
+  };
   return openHelperAgent({
     transport: { url: CHAT_PATH, fetch: (request) => router.fetch(request) },
-    tools: pageTools,
-    title: "Site helper",
+    tools: pageTools(hooks),
+    title: "ヘルプ",
     greeting:
-      "Ask me about this site — how the static build works, what an island is, or what page " +
-      "you are on. There is no model behind me: I am a script, running entirely in this tab.",
+      "遊び方や画面のことを聞いてください。おかしなところを見つけたら「報告」と送ると、" +
+      "画面でその場所をタップして選び、作者への報告文を作れます。" +
+      "(中身は台本で答えるだけの、このページの中で動くヘルパーです。)",
+    placeholder: "例: 詰碁の遊び方 / 報告",
   });
 }
