@@ -93,8 +93,45 @@ const listeners = new Set<() => void>();
  */
 export function gameCenter(): GameCenter | null {
   if (typeof document === "undefined") return null;
-  client ??= GameCenter.init({ gameId: GAME_ID });
+  if (!client) {
+    client = make();
+    followQueue();
+  }
   return client;
+}
+
+/** A client, and a redraw once it has sent the queue (a launch from the hub empties it). */
+function make(): GameCenter {
+  const gc = GameCenter.init({ gameId: GAME_ID });
+  void gc.ready.then(notify);
+  return gc;
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Keeps the queue the page shows in step with the one in storage.
+ *
+ * The SDK reads the queue once, when it is made. The queue empties in another page, though: the
+ * hub's claim page ends with "ゲームに戻る", a link back to the top page carrying what it recorded,
+ * and the client made there drops those keys. A tab that stayed open — or one the browser brings
+ * back from its back-forward cache — would go on offering to record them. So remake the client
+ * when another tab writes the queue, and when a page is shown from the cache.
+ */
+function followQueue(): void {
+  const queueKey = `gc:pending:${GAME_ID}`;
+  const remake = () => {
+    client = make();
+    notify();
+  };
+  addEventListener("storage", (event) => {
+    if (event.key === queueKey || event.key === null) remake();
+  });
+  addEventListener("pageshow", (event) => {
+    if (event.persisted) remake();
+  });
 }
 
 /**
@@ -112,7 +149,7 @@ export async function unlock(key: AchievementKey): Promise<void> {
   const gc = gameCenter();
   if (!gc) return;
   await gc.unlock(key);
-  for (const listener of listeners) listener();
+  notify();
 }
 
 /** Calls `listener` whenever the queue may have changed; returns the unsubscribe. */

@@ -112,9 +112,10 @@
   パネルを隠す。タップは盤に届かない) で要素を選ぶか、⌖ で指したパスを送る。
   picker が返すのは CSS パスだけで、「送る」で `draft_report`
   が報告文を作るときに `context.ts`
-  がページ・盤の点・見出し・状態表示を足す。報告文はコピーして GameCenter
-  のフィードバックの URL を返す (フォームは事前入力できないので
-  貼り付けてもらう)。会話の流れは `web/server/helper_agent.test.ts`。
+  がページ・盤の点・見出し・状態表示を足す。報告文は SDK 0.5.1 の
+  `feedbackUrl({ kind, message })` で GameCenter
+  のフィードバックのフォームに記入済みで渡す
+  (プレイヤーが確かめて送る)。会話の流れは `web/server/helper_agent.test.ts`。
 
 ## GameCenter 連携
 
@@ -133,6 +134,10 @@
   `lib/game_center_link.tsx` の記録リンクを各画面に出す。**window.open
   はしない**。トップページの `islands/game_center.tsx` は、ハブからの起動時に
   URL のトークンを読むためにも置いている。
+- 記録待ちは、GameCenter の記録ページの「ゲームに戻る」(トップページへ
+  `#gcclaimed=…` で戻る) か、ハブからの起動 (トークンで送る) で消える。だから
+  記録リンクは同じタブで開く。他のタブや bfcache から戻ったページは、`storage` /
+  `pageshow` で SDK クライアントを作り直して追いつく (`game_center.ts`)。
 - 不具合・要望: SDK 0.5 の `feedbackUrl()` (GameCenter のフィードバックページ。
   プレイヤーがサインインして作者に送る)。`lib/game_center_link.tsx` の
   `feedbackLinkView()` を各画面に出す (新しいタブで開く)。
