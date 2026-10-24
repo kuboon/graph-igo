@@ -14,6 +14,8 @@
  */
 
 import { dummyAgent } from "@remix-kbn/helper-agent/agent/dummy";
+
+import { pathIn } from "./context.ts";
 import type {
   Agent,
   AgentInput,
@@ -118,10 +120,26 @@ function openReport(
           };
         } else if (name === "draft_report") report = undefined;
       }
-    } else if (message.role === "user" && report) {
-      if (CANCEL_WORDS.test(message.content)) report = undefined;
-      else if (!SEND_WORDS.test(message.content.trim())) {
-        report.words.push(message.content.trim());
+    } else if (message.role === "user") {
+      // A path from the ⌖ button opens a report too, or names the element of an open one.
+      const path = pathIn(message.content);
+      // The ⌖ button writes it in backticks.
+      const rest = (path
+        ? message.content.replace(`\`${path}\``, "").replace(path, "")
+        : message.content).trim();
+      if (report) {
+        if (CANCEL_WORDS.test(rest)) {
+          report = undefined;
+        } else {
+          if (path) {
+            report.element = path;
+          }
+          if (rest && !SEND_WORDS.test(rest)) {
+            report.words.push(rest);
+          }
+        }
+      } else if (path) {
+        report = { element: path, words: rest ? [rest] : [] };
       }
     }
   }
@@ -172,10 +190,21 @@ function script(input: AgentInput): DummyTurn {
   const text = latestUserText(messages).trim();
   const report = openReport(messages);
 
+  // The report this message closed, if it was "やめる": `openReport` has already dropped it.
+  if (!report && CANCEL_WORDS.test(text) && openReport(messages.slice(0, -1))) {
+    return {
+      text: "報告はやめました。また何かあれば「報告」と送ってください。",
+    };
+  }
+
   if (report) {
-    if (CANCEL_WORDS.test(text)) {
+    const path = pathIn(text);
+    if (path) {
       return {
-        text: "報告はやめました。また何かあれば「報告」と送ってください。",
+        text: `指した場所 (${path}) を報告に添えます。` +
+          (report.words.length === 0
+            ? "何をしたら、どうなったかを書いて、最後に「送る」と送ってください。"
+            : "書き足すことがあれば続けて、終わったら「送る」と送ってください。"),
       };
     }
     if (SEND_WORDS.test(text)) {

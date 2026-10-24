@@ -100,19 +100,21 @@
   router・asset bundler・解説の Markdown・og 画像 (静的ビルドのためだけにある)。
   `/my` (id.kbn.one サインイン + push 通知) などのデモはまだ残っている。
 
-## ヘルプ (`@remix-kbn/helper-agent`)
+## ヘルプ (`@kuboon/chat-element` + `@remix-kbn/helper-agent`)
 
 - `web/client/helper/` — ヘッダー (`layout.tsx`) とゲーム画面の上のバー
-  (`game_frame.tsx`) の「ヘルプ」が開くチャット。サーバーが無いので、controller
-  をページ内の router に載せ、`agent/dummy` の台本 (`agent.ts`) で答える。
-  チャンクの URL は `<meta name="helper-src">` で渡す。
-- 報告: 「報告」と送ると `pick_element` (`picker.ts`) で画面の要素をタップして
-  選ぶ (そのタップは盤に届かない)。続けて書いた内容と選んだ要素 (ページ・要素の
-  パス・文字・盤の点・状態表示) から、「送る」で `draft_report` が報告文を作り、
-  コピーして GameCenter のフィードバックの URL を返す
-  (フィードバックのフォームは
-  事前入力できないので貼り付けてもらう)。会話の流れは
-  `web/server/helper_agent.test.ts`。
+  (`game_frame.tsx`) の「ヘルプ」が開くチャット。パネルは `@kuboon/chat-element`
+  の `openChat` (`<chat-panel>`、⌖ ボタンで画面の要素を指せる)。答えるのは
+  `@remix-kbn/helper-agent` の controller と `agent/dummy` の台本 (`agent.ts`)
+  で、サーバーが無いのでページ内の router に載せている。チャンクの URL は
+  `<meta name="helper-src">` で渡す。
+- 報告: 「報告」と送ると `pick_element` (chat-element の `pickElement`。選ぶ間は
+  パネルを隠す。タップは盤に届かない) で要素を選ぶか、⌖ で指したパスを送る。
+  picker が返すのは CSS パスだけで、「送る」で `draft_report`
+  が報告文を作るときに `context.ts`
+  がページ・盤の点・見出し・状態表示を足す。報告文はコピーして GameCenter
+  のフィードバックの URL を返す (フォームは事前入力できないので
+  貼り付けてもらう)。会話の流れは `web/server/helper_agent.test.ts`。
 
 ## GameCenter 連携
 

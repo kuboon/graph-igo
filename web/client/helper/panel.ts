@@ -1,9 +1,11 @@
 /**
  * The chat, wired up — both halves of it, in one document.
  *
- * This is the whole point of the demo. `helperAgentController` is an ordinary
- * `@remix-run/fetch-router` request handler, and `HelperAgentSession`'s transport takes a `fetch`
- * rather than a URL, so the two can be introduced to each other without an origin in between: the
+ * The panel is `@kuboon/chat-element` (`<chat-panel>` in a `<dialog>`, with the ⌖ button that
+ * lets the player point at the screen); what answers it is `@remix-kbn/helper-agent`'s
+ * controller, which speaks the same wire format. `helperAgentController` is an ordinary
+ * `@remix-run/fetch-router` request handler, and the chat's transport takes a `fetch` rather than
+ * a URL, so the two can be introduced to each other without an origin in between: the
  * router below runs in the browser, the client posts to it, and the request never leaves the page.
  * On GitHub Pages, where there is no server to put an API key on, that is the difference between
  * a working chat and a screenshot of one.
@@ -20,8 +22,7 @@
 
 import { createRouter } from "@remix-run/fetch-router";
 import { helperAgentController } from "@remix-kbn/helper-agent/controller";
-import { openHelperAgent } from "@remix-kbn/helper-agent/client";
-import type { HelperAgentPanel } from "@remix-kbn/helper-agent/client";
+import { type ChatDialog, openChat } from "@kuboon/chat-element";
 
 import { base } from "../base.ts";
 import { siteAgent } from "./agent.ts";
@@ -39,7 +40,7 @@ const CHAT_PATH = `${base}/helper-agent`;
 export function toggleHelperPanel(): void {
   // A game screen in fullscreen draws nothing outside it, and the panel lives in the body.
   if (document.fullscreenElement) void document.exitFullscreen();
-  // `openHelperAgent` shows what it builds, so the first call needs nothing else.
+  // `openChat` shows what it builds, so the first call needs nothing else.
   if (panel === undefined) {
     panel = build();
     return;
@@ -49,9 +50,9 @@ export function toggleHelperPanel(): void {
   else panel.show();
 }
 
-let panel: HelperAgentPanel | undefined;
+let panel: ChatDialog | undefined;
 
-function build(): HelperAgentPanel {
+function build(): ChatDialog {
   const router = createRouter();
   router.post(CHAT_PATH, helperAgentController(siteAgent()));
 
@@ -60,13 +61,13 @@ function build(): HelperAgentPanel {
     show: () => panel?.show(),
     element: () => panel?.dialog ?? null,
   };
-  return openHelperAgent({
+  return openChat({
     transport: { url: CHAT_PATH, fetch: (request) => router.fetch(request) },
     tools: pageTools(hooks),
     title: "ヘルプ",
     greeting:
-      "遊び方や画面のことを聞いてください。おかしなところを見つけたら「報告」と送ると、" +
-      "画面でその場所をタップして選び、作者への報告文を作れます。" +
+      "遊び方や画面のことを聞いてください。おかしなところを見つけたら「報告」と送るか、" +
+      "⌖ で画面のその場所を指してから送ると、作者への報告文を作れます。" +
       "(中身は台本で答えるだけの、このページの中で動くヘルパーです。)",
     placeholder: "例: 詰碁の遊び方 / 報告",
   });

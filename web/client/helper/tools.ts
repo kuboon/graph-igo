@@ -8,14 +8,18 @@
  *
  * Reports go to GameCenter's feedback page (`gc.feedbackUrl()`), where the player signs in and the
  * author reads them. Nothing is sent from here: the page has no session to send with. So the
- * helper drafts the text — the player's words, plus the element they picked on the screen — and
- * hands over the link to paste it into.
+ * helper drafts the text — the player's words, plus the element they pointed at — and hands over
+ * the link to paste it into.
+ *
+ * Pointing is `@kuboon/chat-element`'s picker, and what it gives back is a CSS path only; the
+ * game's context for that path is added when the report is drafted (`context.ts`).
  */
 
-import type { ClientTool } from "@remix-kbn/helper-agent/client";
+import type { ClientTool } from "@kuboon/chat-element";
+import { elementPath, pickElement } from "@kuboon/chat-element/picker";
 
 import { gameCenter } from "../game_center.ts";
-import { describeElement, onPage, pickElement } from "./picker.ts";
+import { describeScreen, onPage } from "./context.ts";
 
 /** What the tools need from the panel they are offered in. */
 export interface PanelHooks {
@@ -46,21 +50,27 @@ const whereAmI: ClientTool = {
   },
 };
 
-/** The player taps the part of the screen the report is about. */
+/**
+ * The player taps the part of the screen the report is about.
+ *
+ * `chat-element`'s own `pickElementTool`, except that the panel steps aside while the player
+ * picks: on a phone the corner panel covers most of the board. Throws when the pick is given up,
+ * so the script can tell "did not pick" from a path.
+ */
 function pickTool(panel: PanelHooks): ClientTool {
   return {
     name: "pick_element",
     description:
-      "Asks the person to tap the part of the screen they mean, and returns a description of " +
-      "it (the page, the element, its text, the board point, the status line). Use it when they " +
-      "want to report something they can see.",
+      "Asks the person to tap the part of the screen they mean, and returns its CSS path. Use it " +
+      "when they want to report something they can see.",
     inputSchema: { type: "object", properties: {} },
     run: async (_input, signal) => {
       panel.hide();
       try {
         const self = panel.element();
-        const el = await pickElement(signal, self ? [self] : []);
-        return describeElement(el);
+        const el = await pickElement({ ignore: self ? [self] : [], signal });
+        if (el === null) throw new Error("選ぶのを取りやめました");
+        return elementPath(el);
       } finally {
         panel.show();
       }
@@ -96,7 +106,8 @@ const draftReport: ClientTool = {
       },
       element: {
         type: "string",
-        description: "What pick_element returned, if they picked something",
+        description:
+          "The CSS path of the element they pointed at, from pick_element or the ⌖ button",
       },
     },
     required: ["description"],
@@ -113,9 +124,9 @@ const draftReport: ClientTool = {
       description.trim(),
       "",
       "---",
-      typeof element === "string" && element
-        ? element
-        : `ページ: ${location.href}`,
+      describeScreen(
+        typeof element === "string" && element ? element : undefined,
+      ),
       `ブラウザ: ${navigator.userAgent}`,
     ].join("\n").slice(0, MAX_REPORT);
 
