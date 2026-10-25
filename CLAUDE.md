@@ -6,8 +6,8 @@
 
 `deno-remix-tmpl` から作った派生アプリ。ステップ 0 (static モード) とステージ 1
 は済み。ステージ 2 は一部済み (hydration-demo・showcase・spa を削除、blog は解説
-`docs` に、fullscreen はゲーム画面の枠に転用)。helper・signin・push
-はまだ残っている。
+`docs` に、fullscreen はゲーム画面の枠に転用、signin・push は削除)。helper
+はゲームのヘルプとして使っている。
 
 ## このリポジトリは何か（最初に判定する）
 
@@ -98,7 +98,7 @@
 - テンプレ由来の `web/` — `web/client/` はブラウザに渡るもの全て (routes / pages
   / islands / layout / static、`deno.ns` 無しで型チェック)、`web/server/` は
   router・asset bundler・解説の Markdown・og 画像 (静的ビルドのためだけにある)。
-  `/my` (id.kbn.one サインイン + push 通知) などのデモはまだ残っている。
+  サインイン (`/my`、id.kbn.one) と push 通知のデモは削除した。
 
 ## ヘルプ (`@kuboon/chat-element` + `@remix-kbn/helper-agent`)
 

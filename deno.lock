@@ -3,7 +3,6 @@
   "specifiers": {
     "jsr:@deno/loader@0.5": "0.5.0",
     "jsr:@kuboon/chat-element@0.1": "0.1.0",
-    "jsr:@kuboon/dpop@~0.1.2": "0.1.2",
     "jsr:@kuboon/game-center-sdk@~0.5.1": "0.5.1",
     "jsr:@kuboon/md@0.7": "0.7.0",
     "jsr:@remix-kbn/assets-deno@0.9": "0.9.0",
@@ -14,7 +13,6 @@
     "jsr:@std/cli@1": "1.0.32",
     "jsr:@std/cli@^1.0.32": "1.0.32",
     "jsr:@std/collections@^1.1.3": "1.4.0",
-    "jsr:@std/encoding@1.0.10": "1.0.10",
     "jsr:@std/encoding@^1.0.11": "1.0.11",
     "jsr:@std/fmt@^1.0.10": "1.0.10",
     "jsr:@std/front-matter@^1.0.9": "1.0.9",
@@ -63,12 +61,6 @@
     },
     "@kuboon/chat-element@0.1.0": {
       "integrity": "fd8b9dd0f8403168718031ac2dd070e56ea1f4ef3c5e488f8c5dc6264cf5cf27"
-    },
-    "@kuboon/dpop@0.1.2": {
-      "integrity": "30de96c140e7b23e2ebee0145c75adc9dfe04ecbe288546348bd4b619b733add",
-      "dependencies": [
-        "jsr:@std/encoding@1.0.10"
-      ]
     },
     "@kuboon/game-center-sdk@0.5.1": {
       "integrity": "d41ed44f674e8e7595adfc2db8e0fa5d333f9e364e6e547ab5eb40a5414ce690"
@@ -132,9 +124,6 @@
     "@std/collections@1.4.0": {
       "integrity": "bd7f74966e11de11b1f0420b7e8cb7bb381d8af7872b738443b92050db28c9c0"
     },
-    "@std/encoding@1.0.10": {
-      "integrity": "8783c6384a2d13abd5e9e87a7ae0520a30e9f56aeeaa3bdf910a3eaaf5c811a1"
-    },
     "@std/encoding@1.0.11": {
       "integrity": "e7cef2f0b3153bccc17431e7c864a1de03a4b6d9647389c43e08aaa775d37385"
     },
@@ -162,7 +151,7 @@
       "integrity": "4f1575226ca7c0df1df38b26d50265fed30869b2a63ab867edc5b92492150c8c",
       "dependencies": [
         "jsr:@std/cli@^1.0.32",
-        "jsr:@std/encoding@^1.0.11",
+        "jsr:@std/encoding",
         "jsr:@std/fmt",
         "jsr:@std/fs",
         "jsr:@std/html",
@@ -2759,7 +2748,6 @@
   "workspace": {
     "dependencies": [
       "jsr:@kuboon/chat-element@0.1",
-      "jsr:@kuboon/dpop@~0.1.2",
       "jsr:@kuboon/game-center-sdk@~0.5.1",
       "jsr:@kuboon/md@0.7",
       "jsr:@remix-kbn/assets-deno@0.9",
