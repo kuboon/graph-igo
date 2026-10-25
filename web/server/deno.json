@@ -19,8 +19,7 @@
         ],
         "ignore": [
           "NODE_ENV",
-          "VSCODE_TEXTMATE_DEBUG",
-          "IDP_ORIGIN"
+          "VSCODE_TEXTMATE_DEBUG"
         ]
       },
       "import": true
@@ -31,8 +30,7 @@
       ],
       "env": {
         "allow": [
-          "PORT",
-          "IDP_ORIGIN"
+          "PORT"
         ],
         "ignore": [
           "BASE_URL",
@@ -43,8 +41,7 @@
       "net": [
         "0.0.0.0",
         "127.0.0.1",
-        "localhost",
-        "id.kbn.one"
+        "localhost"
       ],
       "import": true
     }

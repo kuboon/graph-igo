@@ -39,7 +39,6 @@ import { css, type Handle, type RemixNode } from "@remix-run/component";
 
 import { base, BASE_META_NAME } from "./base.ts";
 import { HELPER_BUTTON_ID, HELPER_META_NAME } from "./helper/button.ts";
-import { NavAuth } from "./islands/nav_auth.tsx"; // [feature:signin]
 import { routes } from "./routes.ts";
 import { color, contentWidth } from "./tokens.ts";
 
@@ -146,7 +145,7 @@ export function Layout(handle: Handle<LayoutProps>) {
   return () => {
     const props = handle.props;
 
-    // `lang="ja"`: the app pages (`/my`, `/hydration`) are Japanese; the demo pages brought over
+    // `lang="ja"`: the pages are Japanese; the demo pages brought over
     // from the SSG starter are English. A site writing in one language changes this attribute.
     return (
       <html lang="ja">
@@ -273,8 +272,6 @@ export function Shell(handle: Handle<ShellProps>) {
                 </button>
               )
               : null}
-            {/* [feature:signin] */}
-            <NavAuth myHref={routes.my.href()} />
           </nav>
         </header>
         <main mix={[bandStyle, mainStyle]}>{handle.props.children}</main>

@@ -9,7 +9,7 @@
  * Reports go to GameCenter's feedback page (`gc.feedbackUrl()`), where the player signs in and the
  * author reads them. Nothing is sent from here: the page has no session to send with. So the
  * helper drafts the text — the player's words, plus the element they pointed at — and hands over
- * the link to paste it into.
+ * a link that opens the form with it filled in.
  *
  * Pointing is `@kuboon/chat-element`'s picker, and what it gives back is a CSS path only; the
  * game's context for that path is added when the report is drafted (`context.ts`).
@@ -17,6 +17,8 @@
 
 import type { ClientTool } from "@kuboon/chat-element";
 import { elementPath, pickElement } from "@kuboon/chat-element/picker";
+
+import { MAX_FEEDBACK_LENGTH } from "@kuboon/game-center-sdk";
 
 import { gameCenter } from "../game_center.ts";
 import { describeScreen, onPage } from "./context.ts";
@@ -78,24 +80,21 @@ function pickTool(panel: PanelHooks): ClientTool {
   };
 }
 
-/** The longest report GameCenter's feedback form takes. */
-const MAX_REPORT = 4000;
-
 /**
- * Drafts the report and hands over where to send it.
+ * Drafts the report and hands over the link that sends it.
  *
- * It copies the draft to the clipboard when the browser lets it — a tool runs after the reply has
- * streamed, so there may be no user gesture left and the copy can be refused — and returns the
- * text either way, with the feedback link. The link is returned rather than opened: the panel
- * renders `http(s)` URLs as links, and the player follows it when they choose to.
+ * SDK 0.5.1's `feedbackUrl({ kind, message })` opens GameCenter's feedback form with the draft
+ * already filled in (it rides in the fragment, so no server sees it before the player sends it).
+ * The player reads it there, signs in, and presses send. The link is returned rather than opened:
+ * the panel renders `http(s)` URLs as links, and the player follows it when they choose to.
  */
 const draftReport: ClientTool = {
   name: "draft_report",
   description:
     "Drafts a bug report or a request for this game from what the person said and the element " +
-    "they picked, copies it if it can, and returns it with the link to GameCenter's feedback " +
-    "page to paste it into. Use it only after they have described the problem and said to send " +
-    "it. Nothing is sent until they paste it there and press send.",
+    "they pointed at, and returns a link to GameCenter's feedback form with the draft filled in. " +
+    "Use it only after they have described the problem and said to send it. Nothing is sent " +
+    "until they press send on that form.",
   inputSchema: {
     type: "object",
     properties: {
@@ -112,7 +111,7 @@ const draftReport: ClientTool = {
     },
     required: ["description"],
   },
-  run: async (input) => {
+  run: (input) => {
     const { description, element } = input as {
       description?: unknown;
       element?: unknown;
@@ -128,29 +127,26 @@ const draftReport: ClientTool = {
         typeof element === "string" && element ? element : undefined,
       ),
       `ブラウザ: ${navigator.userAgent}`,
-    ].join("\n").slice(0, MAX_REPORT);
+    ].join("\n").slice(0, MAX_FEEDBACK_LENGTH);
+    const kind = REQUEST_WORDS.test(description) ? "request" : "bug";
 
-    let copied = false;
-    try {
-      await navigator.clipboard.writeText(report);
-      copied = true;
-    } catch {
-      // No gesture left, or no clipboard: the text below is there to copy by hand.
+    const url = gameCenter()?.feedbackUrl({ kind, message: report });
+    if (!url) {
+      throw new Error("GameCenter に繋がらないので、送り先を出せませんでした");
     }
-    const url = gameCenter()?.feedbackUrl();
-    const where = url
-      ? `${url} を開いて、「内容」に貼り付けて送ってください (送るには id.kbn.one のサインインが要ります)。`
-      : "GameCenter に繋がらないので、送り先を出せませんでした。";
     return [
-      copied
-        ? "報告文を作って、コピーしました。"
-        : "報告文を作りました。下の文をコピーしてください。",
-      where,
+      "報告文を作りました。下のリンクで GameCenter のフォームが記入済みで開きます。" +
+      "内容を確かめて「送る」を押してください (送るには id.kbn.one のサインインが要ります)。",
+      "",
+      url,
       "",
       report,
     ].join("\n");
   },
 };
+
+/** A report that asks for something rather than says something is broken. */
+const REQUEST_WORDS = /要望|ほしい|欲しい|してほしい|できるように/;
 
 /** Everything this page offers the helper. */
 export function pageTools(panel: PanelHooks): readonly ClientTool[] {

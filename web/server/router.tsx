@@ -39,7 +39,6 @@ import { docsController } from "./docs/mod.tsx";
 import * as Home from "../client/pages/index.tsx";
 import * as Play from "../client/pages/play.tsx";
 import * as Tsumego from "../client/pages/tsumego.tsx";
-import * as My from "../client/pages/my.tsx";
 
 /** Deploy path prefix. The build strips it back off when writing, so output lands at the root. */
 export { base };
@@ -80,16 +79,6 @@ const staticFiles = await createFileTree({
   cacheControl: "public, max-age=3600",
 });
 
-/**
- * The service worker, from `client/sw.js`.
- *
- * It is a route of its own rather than a file under `static/` because a worker's scope is the
- * directory it is served from: `${base}/static/sw.js` could only control `${base}/static/`.
- */
-const serviceWorker = await Deno.readTextFile(
-  new URL("../client/sw.js", import.meta.url),
-);
-
 /** `render({ assets })` puts `context.render(node)` on every request. */
 const router = createRouter({ middleware: [render({ assets })] });
 
@@ -108,7 +97,6 @@ const top = createController(routes, {
     home: pageAction(routes.home, Home),
     play: pageAction(routes.play, Play),
     tsumego: pageAction(routes.tsumego, Tsumego),
-    my: pageAction(routes.my, My),
   },
 });
 
@@ -119,30 +107,17 @@ router.map(routes.docs, docsController);
 router.get(`${base}/static/*path`, ({ request }) => staticFiles.fetch(request));
 router.get(`${assetsPath}/*path`, ({ request }) => assets.fetch(request));
 router.get(`${base}/og/*path`, ({ request }) => serveOgImage(request));
-// [feature:push] The service worker.
-router.get(
-  `${base}/sw.js`,
-  () =>
-    new Response(serviceWorker, {
-      headers: {
-        "content-type": "text/javascript; charset=utf-8",
-        "cache-control": "no-cache",
-        "service-worker-allowed": `${base}/`,
-      },
-    }),
-);
 
 /**
  * Where the static crawl starts.
  *
  * Pages are reached by following links from `/`. The exceptions are things nothing links to: the
- * social cards (an `og:image` is an absolute URL meant for someone else's server), the service
- * worker (the push manager registers it by URL from script) and the game's wasm modules.
+ * social cards (an `og:image` is an absolute URL meant for someone else's server) and the game's
+ * wasm modules.
  */
 export const entryPoints: readonly string[] = [
   "/",
   ...ogPaths(),
-  "/sw.js", // [feature:push]
   // The game's wasm modules: fetched by script (`client/lib/graph_go/wasm.ts`), never linked.
   "/static/wasm/engine.wasm",
   "/static/wasm/cpu.wasm",

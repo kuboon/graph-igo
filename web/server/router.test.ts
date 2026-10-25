@@ -28,22 +28,6 @@ Deno.test("the game's wasm modules are served and crawled", async () => {
   }
 });
 
-Deno.test("GET /my embeds idp-origin meta", async () => {
-  const res = await router.fetch(new Request("http://x/my"));
-  assertEquals(res.status, 200);
-  const html = await res.text();
-  assertStringIncludes(html, '<meta name="idp-origin"');
-  assertStringIncludes(html, "https://id.kbn.one");
-});
-
-Deno.test("GET /sw.js serves the worker with a root scope", async () => {
-  const res = await router.fetch(new Request("http://x/sw.js"));
-  assertEquals(res.status, 200);
-  assertStringIncludes(res.headers.get("content-type") ?? "", "javascript");
-  assertEquals(res.headers.get("service-worker-allowed"), "/");
-  assertStringIncludes(await res.text(), "addEventListener");
-});
-
 for (
   const [path, needle] of [
     ["/docs", "詰碁のしくみ"],
