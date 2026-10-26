@@ -9,7 +9,7 @@
  * `boardView`: the islands own the state and re-render it whole.
  */
 
-import { css, on, ref, type RemixNode } from "@remix-run/component";
+import { css, on, type RemixNode } from "@remix-run/component";
 
 import { HELPER_BUTTON_ID } from "../../helper/button.ts";
 import { routes } from "../../routes.ts";
@@ -29,12 +29,11 @@ export interface GameFrameProps {
 }
 
 export function gameFrame(props: GameFrameProps): RemixNode {
-  let stage: HTMLElement | null = null;
   const offerFullscreen = canFullscreen();
   const fullscreen = isFullscreen();
 
   return (
-    <div mix={[stageStyle, ref((node) => (stage = node as HTMLElement))]}>
+    <div data-game-stage="" mix={stageStyle}>
       <header mix={barStyle}>
         <a href={routes.home.href()} mix={barLinkStyle}>← グラフ囲碁</a>
         <strong mix={titleStyle}>{props.title}</strong>
@@ -51,7 +50,13 @@ export function gameFrame(props: GameFrameProps): RemixNode {
               type="button"
               mix={[
                 barButtonStyle,
-                on("click", async () => {
+                on("click", async (event) => {
+                  // Found from the button rather than kept from a `ref`: this function runs on
+                  // every render, and a `ref` only fires when the element is made, so a variable
+                  // it set would be empty in every later render's handler.
+                  const stage = event.currentTarget.closest<HTMLElement>(
+                    "[data-game-stage]",
+                  );
                   await toggleFullscreen(stage);
                   props.onFullscreenToggled();
                 }),
