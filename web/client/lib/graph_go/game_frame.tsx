@@ -5,11 +5,20 @@
  * Game pages are `bare` — no site header or footer — and set `viewport-fit=cover`, so the frame
  * pads itself by the safe-area insets. The bar's "全画面" button takes the frame fullscreen where
  * the Fullscreen API exists (`lib/fullscreen.ts`); "ヘルプ" opens the in-page helper
- * (`client/helper/`), where a player can also pick the part of the screen they want to report. A function rather than a component, like
- * `boardView`: the islands own the state and re-render it whole.
+ * (`client/helper/`), where a player can also pick the part of the screen they want to report.
+ *
+ * A component, so that what it keeps outlives a render: the frame's element, from a `ref` (which
+ * fires once, when the element is inserted), and whether it is fullscreen, which it follows
+ * itself. The islands hand it the board and the panel and re-render them as they like.
  */
 
-import { css, on, ref, type RemixNode } from "@remix-run/component";
+import {
+  css,
+  type Handle,
+  on,
+  ref,
+  type RemixNode,
+} from "@remix-run/component";
 
 import { HELPER_BUTTON_ID } from "../../helper/button.ts";
 import { routes } from "../../routes.ts";
@@ -17,6 +26,7 @@ import { color, radius } from "../../tokens.ts";
 import {
   canFullscreen,
   isFullscreen,
+  onFullscreenChange,
   toggleFullscreen,
 } from "../fullscreen.ts";
 
@@ -24,50 +34,54 @@ export interface GameFrameProps {
   title: string;
   board: RemixNode;
   panel: RemixNode;
-  /** Re-render after entering or leaving fullscreen, so the button's label follows. */
-  onFullscreenToggled(): void;
 }
 
-export function gameFrame(props: GameFrameProps): RemixNode {
+export function GameFrame(handle: Handle<GameFrameProps>) {
   let stage: HTMLElement | null = null;
-  const offerFullscreen = canFullscreen();
-  const fullscreen = isFullscreen();
 
-  return (
-    <div mix={[stageStyle, ref((node) => (stage = node as HTMLElement))]}>
-      <header mix={barStyle}>
-        <a href={routes.home.href()} mix={barLinkStyle}>← グラフ囲碁</a>
-        <strong mix={titleStyle}>{props.title}</strong>
-        <a href={routes.docs.index.href()} mix={barLinkStyle}>解説</a>
-        {
-          /* The helper's button: `client/helper/install.ts` listens for it on the document. */
-        }
-        <button type="button" id={HELPER_BUTTON_ID} mix={barButtonStyle}>
-          ヘルプ
-        </button>
-        {offerFullscreen
-          ? (
-            <button
-              type="button"
-              mix={[
-                barButtonStyle,
-                on("click", async () => {
-                  await toggleFullscreen(stage);
-                  props.onFullscreenToggled();
-                }),
-              ]}
-            >
-              {fullscreen ? "全画面を終了" : "全画面"}
-            </button>
-          )
-          : null}
-      </header>
-      <div mix={bodyStyle}>
-        <div mix={boardAreaStyle}>{props.board}</div>
-        <div mix={panelStyle}>{props.panel}</div>
+  handle.queueTask(() => {
+    // Entering or leaving fullscreen by any route — the button, Escape, the helper — redraws the
+    // button's label.
+    onFullscreenChange(() => void handle.update(), handle.signal);
+  });
+
+  return () => {
+    const offerFullscreen = canFullscreen();
+    const fullscreen = isFullscreen();
+
+    return (
+      <div mix={[stageStyle, ref((node) => (stage = node as HTMLElement))]}>
+        <header mix={barStyle}>
+          <a href={routes.home.href()} mix={barLinkStyle}>← グラフ囲碁</a>
+          <strong mix={titleStyle}>{handle.props.title}</strong>
+          <a href={routes.docs.index.href()} mix={barLinkStyle}>解説</a>
+          {
+            /* The helper's button: `client/helper/install.ts` listens for it on the document. */
+          }
+          <button type="button" id={HELPER_BUTTON_ID} mix={barButtonStyle}>
+            ヘルプ
+          </button>
+          {offerFullscreen
+            ? (
+              <button
+                type="button"
+                mix={[
+                  barButtonStyle,
+                  on("click", () => void toggleFullscreen(stage)),
+                ]}
+              >
+                {fullscreen ? "全画面を終了" : "全画面"}
+              </button>
+            )
+            : null}
+        </header>
+        <div mix={bodyStyle}>
+          <div mix={boardAreaStyle}>{handle.props.board}</div>
+          <div mix={panelStyle}>{handle.props.panel}</div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 }
 
 // --- styles -----------------------------------------------------------------

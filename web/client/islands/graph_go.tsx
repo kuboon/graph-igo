@@ -16,8 +16,7 @@ import { base } from "../base.ts";
 import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
 import { color as token, radius } from "../tokens.ts";
 import { boardView } from "../lib/graph_go/board_view.tsx";
-import { gameFrame } from "../lib/graph_go/game_frame.tsx";
-import { onFullscreenChange } from "../lib/fullscreen.ts";
+import { GameFrame } from "../lib/graph_go/game_frame.tsx";
 import { gameCenter, onPendingChange, unlock } from "../game_center.ts";
 import { claimLinkView, feedbackLinkView } from "../lib/game_center_link.tsx";
 import {
@@ -260,7 +259,6 @@ export const GraphGo = clientEntry(
     }
 
     handle.queueTask(async () => {
-      onFullscreenChange(() => void handle.update(), handle.signal);
       handle.signal.addEventListener(
         "abort",
         onPendingChange(() => void handle.update()),
@@ -293,281 +291,289 @@ export const GraphGo = clientEntry(
       const humanTurn = ready && !thinking && !gameOver &&
         seats[toMove] === "human";
 
-      return gameFrame({
-        title: "対局",
-        onFullscreenToggled: () => void handle.update(),
-        board: boardView({
-          shape,
-          stones,
-          onPlay: humanMove,
-          playable: humanTurn,
-          ghost: toMove,
-          lastMove,
-          atari,
-          territory: owner,
-        }),
-        panel: (
-          <div mix={panelStyle}>
-            {claimLinkView()}
-            <p
-              mix={alertStyle}
-              data-kind={loadError ? "error" : "info"}
-              aria-live="polite"
-            >
-              {loadError
-                ? `wasm の読み込みに失敗しました: ${loadError}`
-                : !ready
-                ? "wasm を読み込み中…"
-                : thinking
-                ? `CPU (${NAME[toMove]}) が考え中…`
-                : message}
-            </p>
-
-            <dl mix={statsStyle}>
-              <div>
-                <dt>手番</dt>
-                <dd>{gameOver ? "終局" : NAME[toMove]}</dd>
-              </div>
-              <div>
-                <dt>アゲハマ 黒 / 白</dt>
-                <dd>{captures[0]} / {captures[1]}</dd>
-              </div>
-              <div>
-                <dt>手数</dt>
-                <dd>{history.length}</dd>
-              </div>
-            </dl>
-
-            <div mix={rowStyle}>
-              <button
-                type="button"
-                disabled={!humanTurn}
-                mix={[actionStyle, on("click", () => humanMove(null))]}
+      return (
+        <GameFrame
+          title="対局"
+          board={boardView({
+            shape,
+            stones,
+            onPlay: humanMove,
+            playable: humanTurn,
+            ghost: toMove,
+            lastMove,
+            atari,
+            territory: owner,
+          })}
+          panel={
+            <div mix={panelStyle}>
+              {claimLinkView()}
+              <p
+                mix={alertStyle}
+                data-kind={loadError ? "error" : "info"}
+                aria-live="polite"
               >
-                パス
-              </button>
-              <button
-                type="button"
-                disabled={!ready || history.length === 0 ||
-                  (seats[BLACK] === "cpu" && seats[WHITE] === "cpu")}
-                mix={[actionStyle, on("click", undo)]}
-              >
-                待った
-              </button>
-              <button
-                type="button"
-                disabled={!ready || thinking}
-                mix={[
-                  actionStyle,
-                  on("click", () => {
-                    judge();
-                    void handle.update();
-                  }),
-                ]}
-              >
-                地を判定
-              </button>
-            </div>
+                {loadError
+                  ? `wasm の読み込みに失敗しました: ${loadError}`
+                  : !ready
+                  ? "wasm を読み込み中…"
+                  : thinking
+                  ? `CPU (${NAME[toMove]}) が考え中…`
+                  : message}
+              </p>
 
-            {evaluation
-              ? (
-                <section mix={resultStyle}>
-                  <h3>
-                    {evaluation.winner === EMPTY
-                      ? "持碁"
-                      : `${NAME[evaluation.winner as Player]}の ${
-                        Math.abs(
-                          evaluation.black.score - evaluation.white.score,
-                        )
-                      } 目勝ち`}
-                    {gameOver ? "" : " (途中判定)"}
-                  </h3>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th></th>
-                        <th>石</th>
-                        <th>地</th>
-                        <th>計</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <th>黒</th>
-                        <td>{evaluation.black.stones}</td>
-                        <td>{evaluation.black.territory}</td>
-                        <td>{evaluation.black.score}</td>
-                      </tr>
-                      <tr>
-                        <th>白</th>
-                        <td>{evaluation.white.stones}</td>
-                        <td>{evaluation.white.territory}</td>
-                        <td>
-                          {evaluation.white.score} (コミ {evaluation.komi})
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p mix={mutedStyle}>
-                    空き領域 {evaluation.regions.length} 個: CPU 判定{" "}
-                    {evaluation.regions.filter((r) => r.judgedBy === "cpu")
-                      .length}、 エンジン判定{" "}
-                    {evaluation.regions.filter((r) => r.judgedBy === "engine")
-                      .length}
-                    、どちらの地でもない{" "}
-                    {evaluation.regions.filter((r) => r.owner === EMPTY).length}
-                  </p>
-                </section>
-              )
-              : null}
+              <dl mix={statsStyle}>
+                <div>
+                  <dt>手番</dt>
+                  <dd>{gameOver ? "終局" : NAME[toMove]}</dd>
+                </div>
+                <div>
+                  <dt>アゲハマ 黒 / 白</dt>
+                  <dd>{captures[0]} / {captures[1]}</dd>
+                </div>
+                <div>
+                  <dt>手数</dt>
+                  <dd>{history.length}</dd>
+                </div>
+              </dl>
 
-            <p mix={mutedStyle}>
-              点をクリックすると着手、両者パスで終局して CPU が地を数えます。
-            </p>
-            <p mix={mutedStyle}>{feedbackLinkView()}</p>
-
-            <fieldset mix={fieldsetStyle}>
-              <legend>新しい対局</legend>
-              <label mix={fieldStyle}>
-                <span>盤</span>
-                <select
+              <div mix={rowStyle}>
+                <button
+                  type="button"
+                  disabled={!humanTurn}
+                  mix={[actionStyle, on("click", () => humanMove(null))]}
+                >
+                  パス
+                </button>
+                <button
+                  type="button"
+                  disabled={!ready || history.length === 0 ||
+                    (seats[BLACK] === "cpu" && seats[WHITE] === "cpu")}
+                  mix={[actionStyle, on("click", undo)]}
+                >
+                  待った
+                </button>
+                <button
+                  type="button"
+                  disabled={!ready || thinking}
                   mix={[
-                    inputStyle,
-                    on("change", (event) => {
-                      kind = (event.currentTarget as HTMLSelectElement)
-                        .value as BoardKind;
-                      size = BOARD_KINDS.find((k) => k.kind === kind)?.size ??
-                        size;
+                    actionStyle,
+                    on("click", () => {
+                      judge();
                       void handle.update();
                     }),
                   ]}
                 >
-                  {BOARD_KINDS.map((k) => (
-                    <option
-                      key={k.kind}
-                      value={k.kind}
-                      selected={k.kind === kind}
-                    >
-                      {k.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label mix={fieldStyle}>
-                <span>
-                  {kind === "random"
-                    ? "点の数"
-                    : kind === "rings"
-                    ? "輪の数"
-                    : "大きさ"}
-                </span>
-                <input
-                  key={`size-${kind}`}
-                  type="number"
-                  min="1"
-                  defaultValue={String(size)}
-                  mix={[
-                    inputStyle,
-                    on("change", (e) => void (size = numberFrom(e, size))),
-                  ]}
-                />
-              </label>
-              {kind === "random"
+                  地を判定
+                </button>
+              </div>
+
+              {evaluation
                 ? (
-                  <label mix={fieldStyle}>
-                    <span>シード</span>
-                    <input
-                      type="number"
-                      defaultValue={String(seed)}
-                      mix={[
-                        inputStyle,
-                        on("change", (e) => void (seed = numberFrom(e, seed))),
-                      ]}
-                    />
-                  </label>
+                  <section mix={resultStyle}>
+                    <h3>
+                      {evaluation.winner === EMPTY
+                        ? "持碁"
+                        : `${NAME[evaluation.winner as Player]}の ${
+                          Math.abs(
+                            evaluation.black.score - evaluation.white.score,
+                          )
+                        } 目勝ち`}
+                      {gameOver ? "" : " (途中判定)"}
+                    </h3>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th></th>
+                          <th>石</th>
+                          <th>地</th>
+                          <th>計</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <th>黒</th>
+                          <td>{evaluation.black.stones}</td>
+                          <td>{evaluation.black.territory}</td>
+                          <td>{evaluation.black.score}</td>
+                        </tr>
+                        <tr>
+                          <th>白</th>
+                          <td>{evaluation.white.stones}</td>
+                          <td>{evaluation.white.territory}</td>
+                          <td>
+                            {evaluation.white.score} (コミ {evaluation.komi})
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p mix={mutedStyle}>
+                      空き領域 {evaluation.regions.length} 個: CPU 判定{" "}
+                      {evaluation.regions.filter((r) => r.judgedBy === "cpu")
+                        .length}、 エンジン判定{" "}
+                      {evaluation.regions.filter((r) => r.judgedBy === "engine")
+                        .length}
+                      、どちらの地でもない{" "}
+                      {evaluation.regions.filter((r) => r.owner === EMPTY)
+                        .length}
+                    </p>
+                  </section>
                 )
                 : null}
-              {([BLACK, WHITE] as const).map((p) => (
-                <label key={`seat${p}`} mix={fieldStyle}>
-                  <span>{NAME[p]}</span>
+
+              <p mix={mutedStyle}>
+                点をクリックすると着手、両者パスで終局して CPU が地を数えます。
+              </p>
+              <p mix={mutedStyle}>{feedbackLinkView()}</p>
+
+              <fieldset mix={fieldsetStyle}>
+                <legend>新しい対局</legend>
+                <label mix={fieldStyle}>
+                  <span>盤</span>
                   <select
                     mix={[
                       inputStyle,
                       on("change", (event) => {
-                        seats[p] = (event.currentTarget as HTMLSelectElement)
-                          .value as Seat;
+                        kind = (event.currentTarget as HTMLSelectElement)
+                          .value as BoardKind;
+                        size = BOARD_KINDS.find((k) => k.kind === kind)?.size ??
+                          size;
+                        void handle.update();
                       }),
                     ]}
                   >
-                    <option value="human" selected={seats[p] === "human"}>
-                      人
-                    </option>
-                    <option value="cpu" selected={seats[p] === "cpu"}>
-                      CPU
-                    </option>
+                    {BOARD_KINDS.map((k) => (
+                      <option
+                        key={k.kind}
+                        value={k.kind}
+                        selected={k.kind === kind}
+                      >
+                        {k.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
-              ))}
-              <button
-                type="button"
-                disabled={!ready}
-                mix={[actionStyle, primaryStyle, on("click", newGame)]}
-              >
-                対局開始
-              </button>
-            </fieldset>
+                <label mix={fieldStyle}>
+                  <span>
+                    {kind === "random"
+                      ? "点の数"
+                      : kind === "rings"
+                      ? "輪の数"
+                      : "大きさ"}
+                  </span>
+                  <input
+                    key={`size-${kind}`}
+                    type="number"
+                    min="1"
+                    defaultValue={String(size)}
+                    mix={[
+                      inputStyle,
+                      on("change", (e) => void (size = numberFrom(e, size))),
+                    ]}
+                  />
+                </label>
+                {kind === "random"
+                  ? (
+                    <label mix={fieldStyle}>
+                      <span>シード</span>
+                      <input
+                        type="number"
+                        defaultValue={String(seed)}
+                        mix={[
+                          inputStyle,
+                          on(
+                            "change",
+                            (e) => void (seed = numberFrom(e, seed)),
+                          ),
+                        ]}
+                      />
+                    </label>
+                  )
+                  : null}
+                {([BLACK, WHITE] as const).map((p) => (
+                  <label key={`seat${p}`} mix={fieldStyle}>
+                    <span>{NAME[p]}</span>
+                    <select
+                      mix={[
+                        inputStyle,
+                        on("change", (event) => {
+                          seats[p] = (event.currentTarget as HTMLSelectElement)
+                            .value as Seat;
+                        }),
+                      ]}
+                    >
+                      <option value="human" selected={seats[p] === "human"}>
+                        人
+                      </option>
+                      <option value="cpu" selected={seats[p] === "cpu"}>
+                        CPU
+                      </option>
+                    </select>
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  disabled={!ready}
+                  mix={[actionStyle, primaryStyle, on("click", newGame)]}
+                >
+                  対局開始
+                </button>
+              </fieldset>
 
-            <fieldset mix={fieldsetStyle}>
-              <legend>設定 (すぐ反映)</legend>
-              <label mix={fieldStyle}>
-                <span>コミ</span>
-                <input
-                  type="number"
-                  step="0.5"
-                  defaultValue={String(komi)}
-                  mix={[
-                    inputStyle,
-                    on("change", (e) => void (komi = numberFrom(e, komi))),
-                  ]}
-                />
-              </label>
-              <label mix={fieldStyle}>
-                <span>CPU に判定させる領域の最小サイズ n</span>
-                <input
-                  type="number"
-                  min="1"
-                  defaultValue={String(minSize)}
-                  mix={[
-                    inputStyle,
-                    on(
-                      "change",
-                      (e) =>
-                        void (minSize = Math.max(1, numberFrom(e, minSize))),
-                    ),
-                  ]}
-                />
-              </label>
-              <label mix={fieldStyle}>
-                <span>CPU の強さ (プレイアウト数)</span>
-                <input
-                  type="number"
-                  min="10"
-                  step="100"
-                  defaultValue={String(playouts)}
-                  mix={[
-                    inputStyle,
-                    on(
-                      "change",
-                      (e) =>
-                        void (playouts = Math.max(10, numberFrom(e, playouts))),
-                    ),
-                  ]}
-                />
-              </label>
-            </fieldset>
-          </div>
-        ),
-      });
+              <fieldset mix={fieldsetStyle}>
+                <legend>設定 (すぐ反映)</legend>
+                <label mix={fieldStyle}>
+                  <span>コミ</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    defaultValue={String(komi)}
+                    mix={[
+                      inputStyle,
+                      on("change", (e) => void (komi = numberFrom(e, komi))),
+                    ]}
+                  />
+                </label>
+                <label mix={fieldStyle}>
+                  <span>CPU に判定させる領域の最小サイズ n</span>
+                  <input
+                    type="number"
+                    min="1"
+                    defaultValue={String(minSize)}
+                    mix={[
+                      inputStyle,
+                      on(
+                        "change",
+                        (e) =>
+                          void (minSize = Math.max(1, numberFrom(e, minSize))),
+                      ),
+                    ]}
+                  />
+                </label>
+                <label mix={fieldStyle}>
+                  <span>CPU の強さ (プレイアウト数)</span>
+                  <input
+                    type="number"
+                    min="10"
+                    step="100"
+                    defaultValue={String(playouts)}
+                    mix={[
+                      inputStyle,
+                      on(
+                        "change",
+                        (e) =>
+                          void (playouts = Math.max(
+                            10,
+                            numberFrom(e, playouts),
+                          )),
+                      ),
+                    ]}
+                  />
+                </label>
+              </fieldset>
+            </div>
+          }
+        />
+      );
     };
   },
 );
