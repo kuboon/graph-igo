@@ -21,8 +21,7 @@ import { base } from "../base.ts";
 import { actionStyle, alertStyle, primaryStyle } from "../theme.ts";
 import { color as token, radius } from "../tokens.ts";
 import { boardView, stoneIcon } from "../lib/graph_go/board_view.tsx";
-import { gameFrame } from "../lib/graph_go/game_frame.tsx";
-import { onFullscreenChange } from "../lib/fullscreen.ts";
+import { GameFrame } from "../lib/graph_go/game_frame.tsx";
 import { type BoardShape, makeBoard } from "../lib/graph_go/graphs.ts";
 import {
   gameCenter,
@@ -373,7 +372,6 @@ export const Tsumego = clientEntry(
     }
 
     handle.queueTask(async () => {
-      onFullscreenChange(() => void handle.update(), handle.signal);
       handle.signal.addEventListener(
         "abort",
         onPendingChange(() => void handle.update()),
@@ -409,222 +407,232 @@ export const Tsumego = clientEntry(
         : "info";
       const badge: Player = verifying || status === "choosing" ? toMove : side;
 
-      return gameFrame({
-        title: "詰碁",
-        onFullscreenToggled: () => void handle.update(),
-        board: boardView({
-          shape,
-          stones,
-          onPlay,
-          playable,
-          ghost: verifying ? toMove : side,
-          lastMove,
-          marked: targetGroup(),
-          hint,
-        }),
-        panel: (
-          <div mix={panelStyle}>
-            {claimLinkView()}
-            <div mix={rowStyle}>
-              <button
-                type="button"
-                aria-label="前の問題"
-                mix={[actionStyle, on("click", () => goTo(index - 1))]}
-              >
-                ←
-              </button>
-              <select
-                aria-label="問題"
-                mix={[
-                  selectStyle,
-                  on("change", (event) => {
-                    goTo(
-                      Number((event.currentTarget as HTMLSelectElement).value),
-                    );
-                  }),
-                ]}
-              >
-                {PROBLEMS.map((p, i) => (
-                  <option key={p.id} value={String(i)} selected={i === index}>
-                    {i + 1}. {p.title}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                aria-label="次の問題"
-                mix={[actionStyle, on("click", () => goTo(index + 1))]}
-              >
-                →
-              </button>
-            </div>
+      return (
+        <GameFrame
+          title="詰碁"
+          board={boardView({
+            shape,
+            stones,
+            onPlay,
+            playable,
+            ghost: verifying ? toMove : side,
+            lastMove,
+            marked: targetGroup(),
+            hint,
+          })}
+          panel={
+            <div mix={panelStyle}>
+              {claimLinkView()}
+              <div mix={rowStyle}>
+                <button
+                  type="button"
+                  aria-label="前の問題"
+                  mix={[actionStyle, on("click", () => goTo(index - 1))]}
+                >
+                  ←
+                </button>
+                <select
+                  aria-label="問題"
+                  mix={[
+                    selectStyle,
+                    on("change", (event) => {
+                      goTo(
+                        Number(
+                          (event.currentTarget as HTMLSelectElement).value,
+                        ),
+                      );
+                    }),
+                  ]}
+                >
+                  {PROBLEMS.map((p, i) => (
+                    <option key={p.id} value={String(i)} selected={i === index}>
+                      {i + 1}. {p.title}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  aria-label="次の問題"
+                  mix={[actionStyle, on("click", () => goTo(index + 1))]}
+                >
+                  →
+                </button>
+              </div>
 
-            <div mix={headingStyle}>
-              <h2 mix={titleStyle}>{problem.title}</h2>
-              <button
-                type="button"
-                mix={[actionStyle, on("click", () => void share())]}
-              >
-                {shared ? "コピーしました" : "この問題を共有"}
-              </button>
-            </div>
-            <p mix={youStyle}>
-              {stoneIcon(badge)}
-              <span>
-                {verifying
-                  ? `検証中: ${NAME[toMove]}番`
-                  : status === "choosing"
-                  ? `${NAME[toMove]}番から`
-                  : `あなたは${NAME[side]} (${AIM[side]}側)`}
-              </span>
-            </p>
-            <p mix={alertStyle} data-kind={kind} aria-live="polite">
-              {loadError
-                ? `wasm の読み込みに失敗しました: ${loadError}`
-                : !ready
-                ? "wasm を読み込み中…"
-                : message}
-            </p>
+              <div mix={headingStyle}>
+                <h2 mix={titleStyle}>{problem.title}</h2>
+                <button
+                  type="button"
+                  mix={[actionStyle, on("click", () => void share())]}
+                >
+                  {shared ? "コピーしました" : "この問題を共有"}
+                </button>
+              </div>
+              <p mix={youStyle}>
+                {stoneIcon(badge)}
+                <span>
+                  {verifying
+                    ? `検証中: ${NAME[toMove]}番`
+                    : status === "choosing"
+                    ? `${NAME[toMove]}番から`
+                    : `あなたは${NAME[side]} (${AIM[side]}側)`}
+                </span>
+              </p>
+              <p mix={alertStyle} data-kind={kind} aria-live="polite">
+                {loadError
+                  ? `wasm の読み込みに失敗しました: ${loadError}`
+                  : !ready
+                  ? "wasm を読み込み中…"
+                  : message}
+              </p>
 
-            {status === "choosing"
-              ? (
+              {status === "choosing"
+                ? (
+                  <div mix={rowStyle}>
+                    <button
+                      type="button"
+                      disabled={!ready}
+                      mix={[actionStyle, on("click", () => choose(BLACK))]}
+                    >
+                      {stoneIcon(BLACK)} 黒を持つ (取る)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!ready}
+                      mix={[actionStyle, on("click", () => choose(WHITE))]}
+                    >
+                      {stoneIcon(WHITE)} 白を持つ (逃げる)
+                    </button>
+                  </div>
+                )
+                : null}
+
+              <dl mix={statsStyle}>
+                <div>
+                  <dt>手数</dt>
+                  <dd>{moves}</dd>
+                </div>
+                <div>
+                  <dt>読みの深さ</dt>
+                  <dd>{problem.depth} 手</dd>
+                </div>
+              </dl>
+
+              {status === "choosing" ? null : (
                 <div mix={rowStyle}>
                   <button
                     type="button"
                     disabled={!ready}
-                    mix={[actionStyle, on("click", () => choose(BLACK))]}
+                    mix={[actionStyle, on("click", () => goTo(index))]}
                   >
-                    {stoneIcon(BLACK)} 黒を持つ (取る)
+                    やり直す
                   </button>
-                  <button
-                    type="button"
-                    disabled={!ready}
-                    mix={[actionStyle, on("click", () => choose(WHITE))]}
-                  >
-                    {stoneIcon(WHITE)} 白を持つ (逃げる)
-                  </button>
+                  {verifying
+                    ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={captured()}
+                          mix={[
+                            actionStyle,
+                            primaryStyle,
+                            on("click", cpuMove),
+                          ]}
+                        >
+                          CPU が打つ
+                        </button>
+                        <button
+                          type="button"
+                          mix={[
+                            actionStyle,
+                            on("click", () => verifyMove(null)),
+                          ]}
+                        >
+                          パス
+                        </button>
+                        <button
+                          type="button"
+                          disabled={history.length === 0}
+                          mix={[actionStyle, on("click", undo)]}
+                        >
+                          待った
+                        </button>
+                      </>
+                    )
+                    : over
+                    ? null
+                    : (
+                      <button
+                        type="button"
+                        disabled={!playable}
+                        mix={[actionStyle, on("click", showHint)]}
+                      >
+                        ヒント
+                      </button>
+                    )}
+                  {status === "lost" && !verifying
+                    ? (
+                      <button
+                        type="button"
+                        mix={[
+                          actionStyle,
+                          primaryStyle,
+                          on("click", tryOtherSide),
+                        ]}
+                      >
+                        {NAME[opponent(side)]}で挑戦
+                      </button>
+                    )
+                    : null}
+                  {over && !verifying
+                    ? (
+                      <button
+                        type="button"
+                        mix={[actionStyle, on("click", startVerifying)]}
+                      >
+                        続きを検証
+                      </button>
+                    )
+                    : null}
+                  {status === "won"
+                    ? (
+                      <button
+                        type="button"
+                        mix={[
+                          actionStyle,
+                          verifying ? null : primaryStyle,
+                          on("click", () => goTo(index + 1)),
+                        ]}
+                      >
+                        次の問題へ
+                      </button>
+                    )
+                    : null}
                 </div>
-              )
-              : null}
+              )}
 
-            <dl mix={statsStyle}>
-              <div>
-                <dt>手数</dt>
-                <dd>{moves}</dd>
-              </div>
-              <div>
-                <dt>読みの深さ</dt>
-                <dd>{problem.depth} 手</dd>
-              </div>
-            </dl>
-
-            {status === "choosing" ? null : (
-              <div mix={rowStyle}>
-                <button
-                  type="button"
-                  disabled={!ready}
-                  mix={[actionStyle, on("click", () => goTo(index))]}
-                >
-                  やり直す
-                </button>
-                {verifying
-                  ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={captured()}
-                        mix={[actionStyle, primaryStyle, on("click", cpuMove)]}
-                      >
-                        CPU が打つ
-                      </button>
-                      <button
-                        type="button"
-                        mix={[actionStyle, on("click", () => verifyMove(null))]}
-                      >
-                        パス
-                      </button>
-                      <button
-                        type="button"
-                        disabled={history.length === 0}
-                        mix={[actionStyle, on("click", undo)]}
-                      >
-                        待った
-                      </button>
-                    </>
-                  )
-                  : over
-                  ? null
-                  : (
-                    <button
-                      type="button"
-                      disabled={!playable}
-                      mix={[actionStyle, on("click", showHint)]}
-                    >
-                      ヒント
-                    </button>
-                  )}
-                {status === "lost" && !verifying
-                  ? (
-                    <button
-                      type="button"
-                      mix={[
-                        actionStyle,
-                        primaryStyle,
-                        on("click", tryOtherSide),
-                      ]}
-                    >
-                      {NAME[opponent(side)]}で挑戦
-                    </button>
-                  )
-                  : null}
-                {over && !verifying
-                  ? (
-                    <button
-                      type="button"
-                      mix={[actionStyle, on("click", startVerifying)]}
-                    >
-                      続きを検証
-                    </button>
-                  )
-                  : null}
-                {status === "won"
-                  ? (
-                    <button
-                      type="button"
-                      mix={[
-                        actionStyle,
-                        verifying ? null : primaryStyle,
-                        on("click", () => goTo(index + 1)),
-                      ]}
-                    >
-                      次の問題へ
-                    </button>
-                  )
-                  : null}
-              </div>
-            )}
-
-            <p mix={mutedStyle}>
-              黒は青で囲んだ白を取れば勝ち、白は逃げ切れば勝ちです。見慣れない盤では、普通の碁の感覚が当てになりません。勝てると思う側を選んで、CPU
-              と打ってください。
-            </p>
-            {verifying
-              ? (
-                <p mix={mutedStyle}>
-                  検証中: 黒白どちらの手も打てます。「CPU
-                  が打つ」で手番側の読みの最善手を打ち、
-                  「待った」で戻ります。「やり直す」で問題の最初に戻ります。
-                </p>
-              )
-              : null}
-            <p mix={mutedStyle}>
-              「逃げ切り」は、黒がもう {problem.depth}{" "}
-              手以内には取れないと CPU が読み切った状態です。
-            </p>
-            <p mix={mutedStyle}>{feedbackLinkView()}</p>
-          </div>
-        ),
-      });
+              <p mix={mutedStyle}>
+                黒は青で囲んだ白を取れば勝ち、白は逃げ切れば勝ちです。見慣れない盤では、普通の碁の感覚が当てになりません。勝てると思う側を選んで、CPU
+                と打ってください。
+              </p>
+              {verifying
+                ? (
+                  <p mix={mutedStyle}>
+                    検証中: 黒白どちらの手も打てます。「CPU
+                    が打つ」で手番側の読みの最善手を打ち、
+                    「待った」で戻ります。「やり直す」で問題の最初に戻ります。
+                  </p>
+                )
+                : null}
+              <p mix={mutedStyle}>
+                「逃げ切り」は、黒がもう {problem.depth}{" "}
+                手以内には取れないと CPU が読み切った状態です。
+              </p>
+              <p mix={mutedStyle}>{feedbackLinkView()}</p>
+            </div>
+          }
+        />
+      );
     };
   },
 );
